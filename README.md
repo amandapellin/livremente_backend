@@ -79,3 +79,45 @@ A API sobe, por padrão, em `https://localhost:<porta>` (a porta exata aparece n
 - Branches: `feature/rf01-cadastro-usuario` (código do requisito + descrição curta)
 - Pull requests devem referenciar a issue correspondente (`Closes #12`) e passar por revisão da outra desenvolvedora antes do merge
 - Board de acompanhamento: [Project "Livremente"](https://github.com/users/amandapellin/projects/1)
+
+## Populando o catálogo
+
+O catálogo (livros do Gutendex e artigos do arXiv) é importado por um projeto console separado, `LivreMente.Importer`, incluído neste repositório. Ele não precisa ser executado toda vez que a API sobe — só quando o catálogo estiver vazio ou quando vocês quiserem trazer mais itens.
+
+### Pré-requisitos
+
+- A connection string já configurada via User Secrets (mesma da seção "Configuração do banco de dados" acima) — o importador usa o mesmo `DbContext`.
+- Conexão com a internet, já que ele consulta as APIs externas do Gutendex e do arXiv diretamente.
+
+### Executando a importação
+
+```bash
+cd LivreMente.Importer
+dotnet run
+```
+
+Por padrão, o importador roda:
+- **Gutendex**: até 50 páginas de resultados (32 livros por página, ~1.600 livros), pulando itens com `copyright: true` (RN de domínio público).
+- **arXiv**: até 300 artigos da categoria configurada em `Program.cs` (`cat:cs.AI` por padrão).
+
+Para importar de outras categorias do arXiv, ou mais/menos itens, edite os parâmetros da chamada em `LivreMente.Importer/Program.cs`:
+
+```csharp
+await new ArxivImporter(http, db).ImportAsync(searchQuery: "cat:physics.gen-ph", totalResults: 300);
+```
+
+### Tempo esperado
+
+A importação **não é instantânea**. O arXiv exige um intervalo mínimo entre requisições (o importador já aguarda ~3 segundos a cada página), então importar algumas centenas de artigos leva alguns minutos. O Gutendex é mais rápido, mas 50 páginas ainda representam bastante volume de dados sendo gravado no banco.
+
+### Rodando de novo sem duplicar
+
+O importador é seguro para rodar mais de uma vez: cada material é verificado pelo par `source` + `external_id` antes de ser inserido (é a mesma `UNIQUE (source, external_id)` já definida no schema do banco). Itens já importados são pulados automaticamente, então rodar novamente só traz o que ainda não existe no catálogo.
+
+### Verificando o resultado
+
+```sql
+SELECT source, type, COUNT(*) FROM material GROUP BY source, type;
+```
+
+Esse comando no pgAdmin mostra quantos livros e artigos já foram importados de cada fonte — útil para confirmar que a importação funcionou antes de testar o resto da API.
