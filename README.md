@@ -82,7 +82,7 @@ A API sobe, por padrão, em `https://localhost:<porta>` (a porta exata aparece n
 
 ## Populando o catálogo
 
-O catálogo (livros do Gutendex e artigos do arXiv) é importado por um projeto console separado, `LivreMente.Importer`, incluído neste repositório. Ele não precisa ser executado toda vez que a API sobe — só quando o catálogo estiver vazio ou quando vocês quiserem trazer mais itens.
+O catálogo (livros do Gutendex e artigos do arXiv) é importado por um projeto console separado, `LivreMente.Importer`, incluído neste repositório. Ele não precisa ser executado toda vez que a API sobe — só quando o catálogo estiver vazio ou quando for necessário trazer mais itens.
 
 ### Pré-requisitos
 
