@@ -82,11 +82,11 @@ A API sobe, por padrão, em `https://localhost:<porta>` (a porta exata aparece n
 
 ## Populando o catálogo
 
-O catálogo (livros do Gutendex e artigos do arXiv) é importado por um projeto console separado, `LivreMente.Importer`, incluído neste repositório. Ele não precisa ser executado toda vez que a API sobe — só quando o catálogo estiver vazio ou quando for necessário trazer mais itens.
+O catálogo (livros do Gutendex e artigos do arXiv) é importado por um projeto console separado, `LivreMente.Importer`, incluído neste repositório. Ele não precisa ser executado toda vez que a API sobe — só quando o catálogo estiver vazio ou quando vocês quiserem atualizar os dados.
 
 ### Pré-requisitos
 
-- A connection string já configurada via User Secrets (mesma da seção "Configuração do banco de dados" acima) — o importador usa o mesmo `DbContext`.
+- User Secrets configurado dentro de `LivreMente.Importer` com a mesma connection string usada na API (veja a seção "Configuração do banco de dados" acima — o Importer tem seu próprio User Secrets, independente do da API).
 - Conexão com a internet, já que ele consulta as APIs externas do Gutendex e do arXiv diretamente.
 
 ### Executando a importação
@@ -96,23 +96,22 @@ cd LivreMente.Importer
 dotnet run
 ```
 
-Por padrão, o importador roda:
-- **Gutendex**: até 50 páginas de resultados (32 livros por página, ~1.600 livros), pulando itens com `copyright: true` (RN de domínio público).
-- **arXiv**: até 300 artigos da categoria configurada em `Program.cs` (`cat:cs.AI` por padrão).
+O importador roda em duas etapas:
 
-Para importar de outras categorias do arXiv, ou mais/menos itens, edite os parâmetros da chamada em `LivreMente.Importer/Program.cs`:
+- **Gutendex**: importa o catálogo completo (~79 mil livros), ordenado por popularidade (mais baixados primeiro), pulando itens com `copyright: true` (RN de domínio público).
+- **arXiv**: importa até 150 artigos de cada uma das 20 áreas de conhecimento do arXiv (astro-ph, cond-mat, cs, econ, eess, gr-qc, hep-ex, hep-lat, hep-ph, hep-th, math, math-ph, nlin, nucl-ex, nucl-th, physics, q-bio, q-fin, quant-ph, stat), usando busca por categoria com wildcard — um total de até ~3.000 artigos, representando todas as áreas do arXiv.
 
-```csharp
-await new ArxivImporter(http, db).ImportAsync(searchQuery: "cat:physics.gen-ph", totalResults: 300);
-```
+Para ajustar quantidade ou áreas, edite os parâmetros em `LivreMente.Importer/Program.cs`.
 
 ### Tempo esperado
 
-A importação **não é instantânea**. O arXiv exige um intervalo mínimo entre requisições (o importador já aguarda ~3 segundos a cada página), então importar algumas centenas de artigos leva alguns minutos. O Gutendex é mais rápido, mas 50 páginas ainda representam bastante volume de dados sendo gravado no banco.
+A importação **é demorada**, principalmente por causa do Gutendex: com o catálogo completo (sem limite de páginas) e ~2.500 requisições sequenciais, a execução pode levar de uma a poucas horas. O arXiv é mais rápido individualmente, mas soma o intervalo mínimo de 3 segundos entre páginas em cada uma das 20 categorias.
+
+Recomenda-se rodar num momento em que o computador não seja necessário para outra coisa, e não perto de um prazo apertado.
 
 ### Rodando de novo sem duplicar
 
-O importador é seguro para rodar mais de uma vez: cada material é verificado pelo par `source` + `external_id` antes de ser inserido (é a mesma `UNIQUE (source, external_id)` já definida no schema do banco). Itens já importados são pulados automaticamente, então rodar novamente só traz o que ainda não existe no catálogo.
+O importador é seguro para rodar mais de uma vez: cada material é verificado pelo par `source` + `external_id` antes de ser inserido (é a mesma `UNIQUE (source, external_id)` já definida no schema do banco). Itens já importados são pulados automaticamente, então rodar novamente só traz o que ainda não existe no catálogo — útil, por exemplo, se a importação for interrompida no meio e precisar ser retomada.
 
 ### Verificando o resultado
 
@@ -120,4 +119,8 @@ O importador é seguro para rodar mais de uma vez: cada material é verificado p
 SELECT source, type, COUNT(*) FROM material GROUP BY source, type;
 ```
 
-Esse comando no pgAdmin mostra quantos livros e artigos já foram importados de cada fonte — útil para confirmar que a importação funcionou antes de testar o resto da API.
+Esse comando no pgAdmin mostra quantos livros e artigos já foram importados de cada fonte. Para ver a distribuição de artigos por área do conhecimento:
+
+```sql
+SELECT knowledge_area, COUNT(*) FROM material WHERE source = 'arxiv' GROUP BY knowledge_area ORDER BY COUNT(*) DESC;
+```
