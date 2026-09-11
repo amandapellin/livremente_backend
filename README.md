@@ -124,3 +124,45 @@ Esse comando no pgAdmin mostra quantos livros e artigos já foram importados de 
 ```sql
 SELECT knowledge_area, COUNT(*) FROM material WHERE source = 'arxiv' GROUP BY knowledge_area ORDER BY COUNT(*) DESC;
 ```
+## Padrão de commits
+
+Este projeto segue o padrão [Conventional Commits](https://www.conventionalcommits.org/), adaptado aos épicos já documentados no board do projeto.
+
+### Formato
+
+tipo(escopo): descrição curta no imperativo
+Corpo opcional explicando o porquê, não o quê.
+
+`Refs: RFxx, RNxx` e `Closes #N` são opcionais, incluídos apenas quando ajudam a rastrear a mudança até o requisito ou fechar a issue automaticamente.
+
+### Tipos utilizados
+
+| Tipo | Quando usar |
+|---|---|
+| `feat` | Implementação de uma nova funcionalidade |
+| `fix` | Correção de um bug |
+| `docs` | Mudança em documentação (README, comentários) |
+| `refactor` | Reorganização de código sem mudar comportamento |
+| `test` | Criação ou ajuste de testes |
+| `chore` | Configuração, dependências, tarefas de manutenção |
+
+### Escopo
+
+O escopo reflete o épico ao qual a mudança pertence: `auth`, `catalog`, `reading`, `shelf`, `recommendation` ou `setup`.
+
+### Regras práticas
+
+- **Um commit, uma mudança lógica.** Evite misturar funcionalidades diferentes num único commit.
+- **Imperativo, não passado.** Use `adiciona endpoint`, não `adicionado` ou `adicionei`.
+- **Se usar `Closes #N`**, inclua apenas no commit que efetivamente fecha a issue — em branches com vários commits, evite repetir em todos.
+
+### Exemplos
+
+feat(auth): implementa endpoint de cadastro de usuário
+
+fix(catalog): corrige duplicação de gênero durante importação do Gutendex
+
+O .Local não estava sendo consultado antes do banco, causando
+violação de UNIQUE em concorrência dentro da mesma página.
+
+chore(setup): configura Npgsql e User Secrets no LivreMente.Api
