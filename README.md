@@ -79,3 +79,90 @@ A API sobe, por padrão, em `https://localhost:<porta>` (a porta exata aparece n
 - Branches: `feature/rf01-cadastro-usuario` (código do requisito + descrição curta)
 - Pull requests devem referenciar a issue correspondente (`Closes #12`) e passar por revisão da outra desenvolvedora antes do merge
 - Board de acompanhamento: [Project "Livremente"](https://github.com/users/amandapellin/projects/1)
+
+## Populando o catálogo
+
+O catálogo (livros do Gutendex e artigos do arXiv) é importado por um projeto console separado, `LivreMente.Importer`, incluído neste repositório. Ele não precisa ser executado toda vez que a API sobe — só quando o catálogo estiver vazio ou quando vocês quiserem atualizar os dados.
+
+### Pré-requisitos
+
+- User Secrets configurado dentro de `LivreMente.Importer` com a mesma connection string usada na API (veja a seção "Configuração do banco de dados" acima — o Importer tem seu próprio User Secrets, independente do da API).
+- Conexão com a internet, já que ele consulta as APIs externas do Gutendex e do arXiv diretamente.
+
+### Executando a importação
+
+```bash
+cd LivreMente.Importer
+dotnet run
+```
+
+O importador roda em duas etapas:
+
+- **Gutendex**: importa o catálogo completo (~79 mil livros), ordenado por popularidade (mais baixados primeiro), pulando itens com `copyright: true` (RN de domínio público).
+- **arXiv**: importa até 150 artigos de cada uma das 20 áreas de conhecimento do arXiv (astro-ph, cond-mat, cs, econ, eess, gr-qc, hep-ex, hep-lat, hep-ph, hep-th, math, math-ph, nlin, nucl-ex, nucl-th, physics, q-bio, q-fin, quant-ph, stat), usando busca por categoria com wildcard — um total de até ~3.000 artigos, representando todas as áreas do arXiv.
+
+Para ajustar quantidade ou áreas, edite os parâmetros em `LivreMente.Importer/Program.cs`.
+
+### Tempo esperado
+
+A importação **é demorada**, principalmente por causa do Gutendex: com o catálogo completo (sem limite de páginas) e ~2.500 requisições sequenciais, a execução pode levar de uma a poucas horas. O arXiv é mais rápido individualmente, mas soma o intervalo mínimo de 3 segundos entre páginas em cada uma das 20 categorias.
+
+Recomenda-se rodar num momento em que o computador não seja necessário para outra coisa, e não perto de um prazo apertado.
+
+### Rodando de novo sem duplicar
+
+O importador é seguro para rodar mais de uma vez: cada material é verificado pelo par `source` + `external_id` antes de ser inserido (é a mesma `UNIQUE (source, external_id)` já definida no schema do banco). Itens já importados são pulados automaticamente, então rodar novamente só traz o que ainda não existe no catálogo — útil, por exemplo, se a importação for interrompida no meio e precisar ser retomada.
+
+### Verificando o resultado
+
+```sql
+SELECT source, type, COUNT(*) FROM material GROUP BY source, type;
+```
+
+Esse comando no pgAdmin mostra quantos livros e artigos já foram importados de cada fonte. Para ver a distribuição de artigos por área do conhecimento:
+
+```sql
+SELECT knowledge_area, COUNT(*) FROM material WHERE source = 'arxiv' GROUP BY knowledge_area ORDER BY COUNT(*) DESC;
+```
+## Padrão de commits
+
+Este projeto segue o padrão [Conventional Commits](https://www.conventionalcommits.org/), adaptado aos épicos já documentados no board do projeto.
+
+### Formato
+
+tipo(escopo): descrição curta no imperativo
+Corpo opcional explicando o porquê, não o quê.
+
+`Refs: RFxx, RNxx` e `Closes #N` são opcionais, incluídos apenas quando ajudam a rastrear a mudança até o requisito ou fechar a issue automaticamente.
+
+### Tipos utilizados
+
+| Tipo | Quando usar |
+|---|---|
+| `feat` | Implementação de uma nova funcionalidade |
+| `fix` | Correção de um bug |
+| `docs` | Mudança em documentação (README, comentários) |
+| `refactor` | Reorganização de código sem mudar comportamento |
+| `test` | Criação ou ajuste de testes |
+| `chore` | Configuração, dependências, tarefas de manutenção |
+
+### Escopo
+
+O escopo reflete o épico ao qual a mudança pertence: `auth`, `catalog`, `reading`, `shelf`, `recommendation` ou `setup`.
+
+### Regras práticas
+
+- **Um commit, uma mudança lógica.** Evite misturar funcionalidades diferentes num único commit.
+- **Imperativo, não passado.** Use `adiciona endpoint`, não `adicionado` ou `adicionei`.
+- **Se usar `Closes #N`**, inclua apenas no commit que efetivamente fecha a issue — em branches com vários commits, evite repetir em todos.
+
+### Exemplos
+
+feat(auth): implementa endpoint de cadastro de usuário
+
+fix(catalog): corrige duplicação de gênero durante importação do Gutendex
+
+O .Local não estava sendo consultado antes do banco, causando
+violação de UNIQUE em concorrência dentro da mesma página.
+
+chore(setup): configura Npgsql e User Secrets no LivreMente.Api
