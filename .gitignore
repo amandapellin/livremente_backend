@@ -1,0 +1,40 @@
+# Build outputs (gerados pelo dotnet build/run, não precisam ser versionados)
+bin/
+obj/
+
+# Arquivos de IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Publicação
+publish/
+*.pubxml
+*.pubxml.user
+
+# Logs
+*.log
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
+
+# Testes
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# NuGet
+*.nupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+
+# Segurança 
+appsettings.Development.json
+appsettings.Local.json
+secrets.json
+*.pfx
+*.key
