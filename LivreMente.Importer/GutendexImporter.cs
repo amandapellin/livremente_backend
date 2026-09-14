@@ -42,17 +42,40 @@ public class GutendexImporter(HttpClient http, LivreMenteDbContext db)
     private readonly HttpClient _http = http;
     private readonly LivreMenteDbContext _db = db;
 
-    public async Task ImportAsync(int? maxPages = null)
+    public async Task ImportAsync(int? maxPages = null, int startPage = 1)
     {
-        string? nextUrl = "https://gutendex.com/books/";
-        // Na documentação oficial da API, os resultados são ordenados por número de downloads, do mais popular ao menos popular. 
-        // Então é possível manter a url apenas como https://gutendex.com/books/ sem precisar incluir o ?sort=popular.
+        string? nextUrl = startPage > 1
+            ? $"https://gutendex.com/books/?sort=popular&page={startPage}"
+            : "https://gutendex.com/books/?sort=popular";
         int page = 0;
 
         while (nextUrl is not null && (maxPages is null || page < maxPages))
         {
-            Console.WriteLine($"Gutendex: página {page + 1}...");
-            var result = await _http.GetFromJsonAsync<GutendexPage>(nextUrl);
+            var currentPageNumber = startPage + page;
+            Console.WriteLine($"Gutendex: página {currentPageNumber}...");
+
+            GutendexPage? result = null;
+            int attempt = 0;
+            while (result is null)
+            {
+                try
+                {
+                    result = await _http.GetFromJsonAsync<GutendexPage>(nextUrl);
+                }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+                {
+                    attempt++;
+                    if (attempt > 5)
+                    {
+                        Console.WriteLine($"Falhou {attempt} vezes na página {currentPageNumber}. Abortando.");
+                        throw;
+                    }
+                    var wait = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                    Console.WriteLine($"Erro ({ex.GetType().Name}: {ex.Message}). Tentando de novo em {wait.TotalSeconds}s...");
+                    await Task.Delay(wait);
+                }
+            }
+
             if (result is null) break;
 
             foreach (var book in result.Results)
