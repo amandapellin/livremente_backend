@@ -1,0 +1,41 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+# Cancela runs antigas do mesmo PR quando chega commit novo
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Restore, build e testes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configura .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore
+        run: dotnet restore LivreMente.sln
+
+      - name: Build
+        run: dotnet build LivreMente.sln --no-restore --configuration Release
+
+      - name: Testes
+        run: |
+          if grep -rlq "Microsoft.NET.Test.Sdk" --include=*.csproj .; then
+            dotnet test LivreMente.sln --no-build --configuration Release --verbosity normal
+          else
+            echo "Nenhum projeto de teste encontrado — pulando. Adicione um projeto *.Tests (xUnit/NUnit) para ativar."
+          fi
+
+      # Opcional (estilo/format): falha se o código não estiver formatado
+      # - name: Check de formatação
+      #   run: dotnet format LivreMente.sln --verify-no-changes
