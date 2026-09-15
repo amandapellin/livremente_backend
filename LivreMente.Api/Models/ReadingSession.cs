@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace LivreMente.Api.Models;
 
-public partial class Annotation
+public partial class ReadingSession
 {
     public int Id { get; set; }
 
@@ -11,13 +11,9 @@ public partial class Annotation
 
     public int PublicationId { get; set; }
 
-    public string LinkedExcerpt { get; set; } = null!;
+    public DateTime StartedAt { get; set; }
 
-    public string Content { get; set; } = null!;
-
-    public string EpubPosition { get; set; } = null!;
-
-    public DateTime CreatedAt { get; set; }
+    public DateTime? EndedAt { get; set; }
 
     public virtual Publication Publication { get; set; } = null!;
 

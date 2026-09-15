@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using LivreMente.Api.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace LivreMente.Api.Models;
@@ -17,17 +18,19 @@ public partial class LivreMenteDbContext : DbContext
 
     public virtual DbSet<Annotation> Annotations { get; set; }
 
-    public virtual DbSet<AppUser> AppUsers { get; set; }
-
     public virtual DbSet<Author> Authors { get; set; }
 
     public virtual DbSet<Genre> Genres { get; set; }
 
     public virtual DbSet<Highlight> Highlights { get; set; }
 
-    public virtual DbSet<Material> Materials { get; set; }
+    public virtual DbSet<Publication> Publications { get; set; }
+
+    public virtual DbSet<ReadingSession> ReadingSessions { get; set; }
 
     public virtual DbSet<Shelf> Shelves { get; set; }
+
+    public virtual DbSet<User> Users { get; set; }
 
     public virtual DbSet<UserPreference> UserPreferences { get; set; }
 
@@ -35,6 +38,12 @@ public partial class LivreMenteDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder
+            .HasPostgresEnum<PreferenceType>("preference_type_enum")
+            .HasPostgresEnum<ReadingStatus>("reading_status_enum")
+            .HasPostgresEnum<PublicationSource>("source_enum")
+            .HasPostgresEnum<PublicationType>("type_enum");
+
         modelBuilder.Entity<Annotation>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("annotation_pkey");
@@ -45,75 +54,26 @@ public partial class LivreMenteDbContext : DbContext
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
             entity.Property(e => e.Content).HasColumnName("content");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
             entity.Property(e => e.EpubPosition)
                 .HasMaxLength(255)
                 .HasColumnName("epub_position");
             entity.Property(e => e.LinkedExcerpt).HasColumnName("linked_excerpt");
-            entity.Property(e => e.MaterialId).HasColumnName("material_id");
-            entity.Property(e => e.RegistryDate)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("registry_date");
+            entity.Property(e => e.PublicationId).HasColumnName("publication_id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
 
-            entity.HasOne(d => d.Material).WithMany(p => p.Annotations)
-                .HasForeignKey(d => d.MaterialId)
+            entity.HasOne(d => d.Publication).WithMany(p => p.Annotations)
+                .HasForeignKey(d => d.PublicationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("annotation_material_id_fkey");
+                .HasConstraintName("annotation_publication_id_fkey");
 
             entity.HasOne(d => d.User).WithMany(p => p.Annotations)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("annotation_user_id_fkey");
-        });
-
-        modelBuilder.Entity<AppUser>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("app_user_pkey");
-
-            entity.ToTable("app_user");
-
-            entity.HasIndex(e => e.Email, "app_user_email_key").IsUnique();
-
-            entity.Property(e => e.Id)
-                .UseIdentityAlwaysColumn()
-                .HasColumnName("id");
-            entity.Property(e => e.BirthDate).HasColumnName("birth_date");
-            entity.Property(e => e.Email)
-                .HasMaxLength(254)
-                .HasColumnName("email");
-            entity.Property(e => e.FullName)
-                .HasMaxLength(255)
-                .HasColumnName("full_name");
-            entity.Property(e => e.Gender)
-                .HasMaxLength(30)
-                .HasColumnName("gender");
-            entity.Property(e => e.PasswordHash)
-                .HasMaxLength(70)
-                .HasColumnName("password_hash");
-            entity.Property(e => e.RegistryDate)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("registry_date");
-
-            entity.HasMany(d => d.Genres).WithMany(p => p.Users)
-                .UsingEntity<Dictionary<string, object>>(
-                    "UserGenrePreference",
-                    r => r.HasOne<Genre>().WithMany()
-                        .HasForeignKey("GenreId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("user_genre_preference_genre_id_fkey"),
-                    l => l.HasOne<AppUser>().WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("user_genre_preference_user_id_fkey"),
-                    j =>
-                    {
-                        j.HasKey("UserId", "GenreId").HasName("user_genre_preference_pkey");
-                        j.ToTable("user_genre_preference");
-                        j.IndexerProperty<int>("UserId").HasColumnName("user_id");
-                        j.IndexerProperty<int>("GenreId").HasColumnName("genre_id");
-                    });
         });
 
         modelBuilder.Entity<Author>(entity =>
@@ -157,21 +117,21 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.Id)
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
             entity.Property(e => e.EpubPosition)
                 .HasMaxLength(255)
                 .HasColumnName("epub_position");
             entity.Property(e => e.Excerpt).HasColumnName("excerpt");
-            entity.Property(e => e.MaterialId).HasColumnName("material_id");
-            entity.Property(e => e.RegistryDate)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .HasColumnType("timestamp without time zone")
-                .HasColumnName("registry_date");
+            entity.Property(e => e.PublicationId).HasColumnName("publication_id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
 
-            entity.HasOne(d => d.Material).WithMany(p => p.Highlights)
-                .HasForeignKey(d => d.MaterialId)
+            entity.HasOne(d => d.Publication).WithMany(p => p.Highlights)
+                .HasForeignKey(d => d.PublicationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("highlight_material_id_fkey");
+                .HasConstraintName("highlight_publication_id_fkey");
 
             entity.HasOne(d => d.User).WithMany(p => p.Highlights)
                 .HasForeignKey(d => d.UserId)
@@ -179,13 +139,11 @@ public partial class LivreMenteDbContext : DbContext
                 .HasConstraintName("highlight_user_id_fkey");
         });
 
-        modelBuilder.Entity<Material>(entity =>
+        modelBuilder.Entity<Publication>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("material_pkey");
+            entity.HasKey(e => e.Id).HasName("publication_pkey");
 
-            entity.ToTable("material");
-
-            entity.HasIndex(e => new { e.Source, e.ExternalId }, "uq_material_source_external").IsUnique();
+            entity.ToTable("publication");
 
             entity.Property(e => e.Id)
                 .UseIdentityAlwaysColumn()
@@ -210,53 +168,80 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.PdfFileUrl)
                 .HasMaxLength(500)
                 .HasColumnName("pdf_file_url");
-            entity.Property(e => e.Source)
-                .HasMaxLength(20)
-                .HasColumnName("source");
             entity.Property(e => e.Summary).HasColumnName("summary");
             entity.Property(e => e.Title).HasColumnName("title");
-            entity.Property(e => e.Type)
-                .HasMaxLength(20)
-                .HasColumnName("type");
             entity.Property(e => e.Year).HasColumnName("year");
 
-            entity.HasMany(d => d.Authors).WithMany(p => p.Materials)
+            entity.HasMany(d => d.Authors).WithMany(p => p.Publications)
                 .UsingEntity<Dictionary<string, object>>(
-                    "MaterialAuthor",
+                    "PublicationAuthor",
                     r => r.HasOne<Author>().WithMany()
                         .HasForeignKey("AuthorId")
                         .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("material_author_author_id_fkey"),
-                    l => l.HasOne<Material>().WithMany()
-                        .HasForeignKey("MaterialId")
+                        .HasConstraintName("publication_author_author_id_fkey"),
+                    l => l.HasOne<Publication>().WithMany()
+                        .HasForeignKey("PublicationId")
                         .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("material_author_material_id_fkey"),
+                        .HasConstraintName("publication_author_publication_id_fkey"),
                     j =>
                     {
-                        j.HasKey("MaterialId", "AuthorId").HasName("material_author_pkey");
-                        j.ToTable("material_author");
-                        j.IndexerProperty<int>("MaterialId").HasColumnName("material_id");
+                        j.HasKey("PublicationId", "AuthorId").HasName("publication_author_pkey");
+                        j.ToTable("publication_author");
+                        j.IndexerProperty<int>("PublicationId").HasColumnName("publication_id");
                         j.IndexerProperty<int>("AuthorId").HasColumnName("author_id");
                     });
 
-            entity.HasMany(d => d.Genres).WithMany(p => p.Materials)
+            entity.HasMany(d => d.Genres).WithMany(p => p.Publications)
                 .UsingEntity<Dictionary<string, object>>(
-                    "MaterialGenre",
+                    "PublicationGenre",
                     r => r.HasOne<Genre>().WithMany()
                         .HasForeignKey("GenreId")
                         .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("material_genre_genre_id_fkey"),
-                    l => l.HasOne<Material>().WithMany()
-                        .HasForeignKey("MaterialId")
+                        .HasConstraintName("publication_genre_genre_id_fkey"),
+                    l => l.HasOne<Publication>().WithMany()
+                        .HasForeignKey("PublicationId")
                         .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("material_genre_material_id_fkey"),
+                        .HasConstraintName("publication_genre_publication_id_fkey"),
                     j =>
                     {
-                        j.HasKey("MaterialId", "GenreId").HasName("material_genre_pkey");
-                        j.ToTable("material_genre");
-                        j.IndexerProperty<int>("MaterialId").HasColumnName("material_id");
+                        j.HasKey("PublicationId", "GenreId").HasName("publication_genre_pkey");
+                        j.ToTable("publication_genre");
+                        j.IndexerProperty<int>("PublicationId").HasColumnName("publication_id");
                         j.IndexerProperty<int>("GenreId").HasColumnName("genre_id");
                     });
+
+            entity.HasIndex(p => new { p.Source, p.ExternalId })
+              .IsUnique()
+              .HasDatabaseName("uq_publication_source_external");
+        });
+
+        modelBuilder.Entity<ReadingSession>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("reading_session_pkey");
+
+            entity.ToTable("reading_session");
+
+            entity.Property(e => e.Id)
+                .UseIdentityAlwaysColumn()
+                .HasColumnName("id");
+            entity.Property(e => e.EndedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("ended_at");
+            entity.Property(e => e.PublicationId).HasColumnName("publication_id");
+            entity.Property(e => e.StartedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("started_at");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+
+            entity.HasOne(d => d.Publication).WithMany(p => p.ReadingSessions)
+                .HasForeignKey(d => d.PublicationId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("reading_session_publication_id_fkey");
+
+            entity.HasOne(d => d.User).WithMany(p => p.ReadingSessions)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("reading_session_user_id_fkey");
         });
 
         modelBuilder.Entity<Shelf>(entity =>
@@ -265,27 +250,21 @@ public partial class LivreMenteDbContext : DbContext
 
             entity.ToTable("shelf");
 
-            entity.HasIndex(e => new { e.UserId, e.MaterialId }, "uq_shelf_user_material").IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.PublicationId }, "uq_shelf_user_publication").IsUnique();
 
             entity.Property(e => e.Id)
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
             entity.Property(e => e.BookmarkedPage).HasColumnName("bookmarked_page");
-            entity.Property(e => e.CurrentSessionTime).HasColumnName("current_session_time");
             entity.Property(e => e.LastPageRead).HasColumnName("last_page_read");
-            entity.Property(e => e.MaterialId).HasColumnName("material_id");
-            entity.Property(e => e.ReadPercentage)
-                .HasPrecision(5, 2)
-                .HasColumnName("read_percentage");
-            entity.Property(e => e.Status)
-                .HasMaxLength(20)
-                .HasColumnName("status");
+            entity.Property(e => e.PublicationId).HasColumnName("publication_id");
+            entity.Property(e => e.ReadPercentage).HasColumnName("read_percentage");
             entity.Property(e => e.UserId).HasColumnName("user_id");
 
-            entity.HasOne(d => d.Material).WithMany(p => p.Shelves)
-                .HasForeignKey(d => d.MaterialId)
+            entity.HasOne(d => d.Publication).WithMany(p => p.Shelves)
+                .HasForeignKey(d => d.PublicationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("shelf_material_id_fkey");
+                .HasConstraintName("shelf_publication_id_fkey");
 
             entity.HasOne(d => d.User).WithMany(p => p.Shelves)
                 .HasForeignKey(d => d.UserId)
@@ -293,31 +272,84 @@ public partial class LivreMenteDbContext : DbContext
                 .HasConstraintName("shelf_user_id_fkey");
         });
 
-        modelBuilder.Entity<UserPreference>(entity =>
+        modelBuilder.Entity<User>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("user_preference_pkey");
+            entity.HasKey(e => e.Id).HasName("users_pkey");
 
-            entity.ToTable("user_preference", tb => tb.HasComment("Preferências declaradas pelo usuário, usadas pelo sistema de recomendação (RF29/RF30). Estrutura chave-valor: cada linha representa UMA preferência. Um mesmo usuário tem várias linhas."));
+            entity.ToTable("users");
 
-            entity.HasIndex(e => new { e.UserId, e.PreferenceType, e.PreferenceValue }, "uq_user_preference").IsUnique();
+            entity.HasIndex(e => e.Email, "users_email_key").IsUnique();
 
             entity.Property(e => e.Id)
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
-            entity.Property(e => e.PreferenceType)
+            entity.Property(e => e.BirthDate).HasColumnName("birth_date");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.Email)
+                .HasMaxLength(254)
+                .HasColumnName("email");
+            entity.Property(e => e.FullName)
+                .HasMaxLength(255)
+                .HasColumnName("full_name");
+            entity.Property(e => e.Gender)
                 .HasMaxLength(30)
-                .HasComment("Categoria da preferência. Valores aceitos: language (idioma preferido, ex.: \"pt\"), knowledge_area (área de conhecimento de artigos, ex.: \"cond-mat.supr-con\"), content_type (tipo de material desejado, \"book\" ou \"scientific_article\").")
-                .HasColumnName("preference_type");
+                .HasColumnName("gender");
+            entity.Property(e => e.LastLoginAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("last_login_at");
+            entity.Property(e => e.PasswordHash)
+                .HasMaxLength(70)
+                .HasColumnName("password_hash");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("updated_at");
+
+            entity.HasMany(d => d.Genres).WithMany(p => p.Users)
+                .UsingEntity<Dictionary<string, object>>(
+                    "UserGenre",
+                    r => r.HasOne<Genre>().WithMany()
+                        .HasForeignKey("GenreId")
+                        .OnDelete(DeleteBehavior.ClientSetNull)
+                        .HasConstraintName("user_genre_genre_id_fkey"),
+                    l => l.HasOne<User>().WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.ClientSetNull)
+                        .HasConstraintName("user_genre_user_id_fkey"),
+                    j =>
+                    {
+                        j.HasKey("UserId", "GenreId").HasName("user_genre_pkey");
+                        j.ToTable("user_genre");
+                        j.IndexerProperty<int>("UserId").HasColumnName("user_id");
+                        j.IndexerProperty<int>("GenreId").HasColumnName("genre_id");
+                    });
+        });
+
+        modelBuilder.Entity<UserPreference>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("user_preference_pkey");
+
+            entity.ToTable("user_preference");
+
+            entity.Property(e => e.Id)
+                .UseIdentityAlwaysColumn()
+                .HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.Property(e => e.PreferenceValue)
                 .HasMaxLength(100)
-                .HasComment("Valor correspondente ao preference_type da mesma linha — o significado do texto aqui depende do tipo indicado na coluna ao lado.")
-                .HasColumnName("preference_value");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
+                .HasColumnName("value");
 
             entity.HasOne(d => d.User).WithMany(p => p.UserPreferences)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("user_preference_user_id_fkey");
+            
+            entity.HasIndex(u => new { u.UserId, u.PreferenceType, u.PreferenceValue })
+              .IsUnique()
+              .HasDatabaseName("uq_user_preference");
         });
 
         modelBuilder.Entity<WordLookup>(entity =>
@@ -333,16 +365,16 @@ public partial class LivreMenteDbContext : DbContext
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("consulted_at");
-            entity.Property(e => e.MaterialId).HasColumnName("material_id");
+            entity.Property(e => e.PublicationId).HasColumnName("publication_id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.Property(e => e.Word)
                 .HasMaxLength(100)
                 .HasColumnName("word");
 
-            entity.HasOne(d => d.Material).WithMany(p => p.WordLookups)
-                .HasForeignKey(d => d.MaterialId)
+            entity.HasOne(d => d.Publication).WithMany(p => p.WordLookups)
+                .HasForeignKey(d => d.PublicationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("word_lookup_material_id_fkey");
+                .HasConstraintName("word_lookup_publication_id_fkey");
 
             entity.HasOne(d => d.User).WithMany(p => p.WordLookups)
                 .HasForeignKey(d => d.UserId)

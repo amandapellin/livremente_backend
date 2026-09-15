@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using Microsoft.EntityFrameworkCore;
 using LivreMente.Api.Models;
+using LivreMente.Api.Models.Enums;
 
 namespace LivreMente.Importer;
 
@@ -27,8 +28,8 @@ public class ArxivImporter(HttpClient http, LivreMenteDbContext db)
                 var externalId = entry.Element(Atom + "id")?.Value ?? "";
                 if (string.IsNullOrEmpty(externalId)) continue;
 
-                var exists = await _db.Materials
-                    .AnyAsync(m => m.Source == "arxiv" && m.ExternalId == externalId);
+                var exists = await _db.Publications
+                    .AnyAsync(m => m.Source == PublicationSource.arxiv && m.ExternalId == externalId);
                 if (exists) continue;
 
                 var title = entry.Element(Atom + "title")?.Value.Trim().Replace("\n", " ") ?? "";
@@ -44,11 +45,11 @@ public class ArxivImporter(HttpClient http, LivreMenteDbContext db)
                     .FirstOrDefault(e => e.Name.LocalName == "primary_category")
                     ?.Attribute("term")?.Value;
 
-                var material = new Material
+                var publication = new Publication
                 {
                     ExternalId = externalId,
-                    Source = "arxiv",
-                    Type = "scientific_article",
+                    Source = PublicationSource.arxiv,
+                    Type = PublicationType.scientific_article,
                     Title = title,
                     Summary = summary,
                     Year = year,
@@ -70,10 +71,10 @@ public class ArxivImporter(HttpClient http, LivreMenteDbContext db)
                         author = new Author { Name = name! };
                         _db.Authors.Add(author);
                     }
-                    material.Authors.Add(author);
+                    publication.Authors.Add(author);
                 }
 
-                _db.Materials.Add(material);
+                _db.Publications.Add(publication);
             }
 
             await _db.SaveChangesAsync();

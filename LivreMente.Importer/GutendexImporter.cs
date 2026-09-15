@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using LivreMente.Api.Models;
+using LivreMente.Api.Models.Enums;
 
 namespace LivreMente.Importer;
 
@@ -83,15 +84,15 @@ public class GutendexImporter(HttpClient http, LivreMenteDbContext db)
                 if (book.Copyright) continue; // só domínio público confirmado
 
                 var externalId = book.Id.ToString();
-                var exists = await _db.Materials
-                    .AnyAsync(m => m.Source == "gutendex" && m.ExternalId == externalId);
+                var exists = await _db.Publications
+                    .AnyAsync(m => m.Source == PublicationSource.gutendex && m.ExternalId == externalId);
                 if (exists) continue;
 
-                var material = new Material
+                var publication = new Publication
                 {
                     ExternalId = externalId,
-                    Source = "gutendex",
-                    Type = "book",
+                    Source = PublicationSource.gutendex,
+                    Type = PublicationType.book,
                     Title = book.Title,
                     Language = book.Languages.FirstOrDefault(),
                     Summary = book.Summaries.FirstOrDefault(),
@@ -110,7 +111,7 @@ public class GutendexImporter(HttpClient http, LivreMenteDbContext db)
                         author = new Author { Name = a.Name, BirthYear = a.BirthYear, DeathYear = a.DeathYear };
                         _db.Authors.Add(author);
                     }
-                    material.Authors.Add(author);
+                    publication.Authors.Add(author);
                 }
 
                 foreach (var shelf in book.Bookshelves)
@@ -122,10 +123,10 @@ public class GutendexImporter(HttpClient http, LivreMenteDbContext db)
                         genre = new Genre { Name = shelf };
                         _db.Genres.Add(genre);
                     }
-                    material.Genres.Add(genre);
+                    publication.Genres.Add(genre);
                 }
 
-                _db.Materials.Add(material);
+                _db.Publications.Add(publication);
             }
 
             await _db.SaveChangesAsync();

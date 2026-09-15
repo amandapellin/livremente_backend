@@ -1,17 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using LivreMente.Api.Models.Enums;
 
 namespace LivreMente.Api.Models;
 
-public partial class Material
+public partial class Publication
 {
     public int Id { get; set; }
 
     public string ExternalId { get; set; } = null!;
 
-    public string Source { get; set; } = null!;
-
-    public string Type { get; set; } = null!;
+    public PublicationSource Source { get; set; }
+    
+    public PublicationType Type { get; set; }
 
     public string Title { get; set; } = null!;
 
@@ -36,6 +37,8 @@ public partial class Material
     public virtual ICollection<Annotation> Annotations { get; set; } = new List<Annotation>();
 
     public virtual ICollection<Highlight> Highlights { get; set; } = new List<Highlight>();
+
+    public virtual ICollection<ReadingSession> ReadingSessions { get; set; } = new List<ReadingSession>();
 
     public virtual ICollection<Shelf> Shelves { get; set; } = new List<Shelf>();
 

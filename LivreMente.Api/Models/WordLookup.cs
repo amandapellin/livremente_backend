@@ -9,13 +9,13 @@ public partial class WordLookup
 
     public int UserId { get; set; }
 
-    public int MaterialId { get; set; }
+    public int PublicationId { get; set; }
 
     public string Word { get; set; } = null!;
 
     public DateTime ConsultedAt { get; set; }
 
-    public virtual Material Material { get; set; } = null!;
+    public virtual Publication Publication { get; set; } = null!;
 
-    public virtual AppUser User { get; set; } = null!;
+    public virtual User User { get; set; } = null!;
 }

@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using LivreMente.Api.Models;
+using Npgsql;
+using LivreMente.Api.Models.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,8 +10,19 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+
+dataSourceBuilder.MapEnum<PublicationSource>("source_enum"); 
+dataSourceBuilder.MapEnum<PublicationType>("type_enum");
+dataSourceBuilder.MapEnum<ReadingStatus>("reading_status_enum");
+dataSourceBuilder.MapEnum<PreferenceType>("preference_type_enum");
+
+var dataSource = dataSourceBuilder.Build();
+
 builder.Services.AddDbContext<LivreMenteDbContext>(opt =>
-    opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    opt.UseNpgsql(dataSource));
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 

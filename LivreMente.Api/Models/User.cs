@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace LivreMente.Api.Models;
 
-public partial class AppUser
+public partial class User
 {
     public int Id { get; set; }
 
@@ -17,11 +17,17 @@ public partial class AppUser
 
     public string Gender { get; set; } = null!;
 
-    public DateTime RegistryDate { get; set; }
+    public DateTime CreatedAt { get; set; }
+
+    public DateTime UpdatedAt { get; set; }
+
+    public DateTime? LastLoginAt { get; set; }
 
     public virtual ICollection<Annotation> Annotations { get; set; } = new List<Annotation>();
 
     public virtual ICollection<Highlight> Highlights { get; set; } = new List<Highlight>();
+
+    public virtual ICollection<ReadingSession> ReadingSessions { get; set; } = new List<ReadingSession>();
 
     public virtual ICollection<Shelf> Shelves { get; set; } = new List<Shelf>();
 

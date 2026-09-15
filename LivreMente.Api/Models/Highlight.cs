@@ -9,15 +9,15 @@ public partial class Highlight
 
     public int UserId { get; set; }
 
-    public int MaterialId { get; set; }
+    public int PublicationId { get; set; }
 
     public string Excerpt { get; set; } = null!;
 
     public string EpubPosition { get; set; } = null!;
 
-    public DateTime RegistryDate { get; set; }
+    public DateTime CreatedAt { get; set; }
 
-    public virtual Material Material { get; set; } = null!;
+    public virtual Publication Publication { get; set; } = null!;
 
-    public virtual AppUser User { get; set; } = null!;
+    public virtual User User { get; set; } = null!;
 }
