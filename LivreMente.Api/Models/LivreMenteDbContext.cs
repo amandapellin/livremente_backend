@@ -148,6 +148,8 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.Id)
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
+            entity.Property(e => e.Source).HasColumnName("source");
+            entity.Property(e => e.Type).HasColumnName("type");
             entity.Property(e => e.CopyrightFlag).HasColumnName("copyright_flag");
             entity.Property(e => e.CoverUrl)
                 .HasMaxLength(500)

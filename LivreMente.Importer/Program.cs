@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using LivreMente.Api.Models;
+using LivreMente.Api.Models.Enums;
 using LivreMente.Importer;
 
 var config = new ConfigurationBuilder()
@@ -8,12 +9,18 @@ var config = new ConfigurationBuilder()
     .Build();
 
 var optionsBuilder = new DbContextOptionsBuilder<LivreMenteDbContext>();
-optionsBuilder.UseNpgsql(config.GetConnectionString("DefaultConnection"));
+optionsBuilder.UseNpgsql(config.GetConnectionString("DefaultConnection"), o =>
+{
+    o.MapEnum<PublicationSource>("source_enum");
+    o.MapEnum<PublicationType>("type_enum");
+    o.MapEnum<ReadingStatus>("reading_status_enum");
+    o.MapEnum<PreferenceType>("preference_type_enum");
+});
 
 using var db = new LivreMenteDbContext(optionsBuilder.Options);
 using var http = new HttpClient();
 
-await new GutendexImporter(http, db).ImportAsync(startPage: 723);
+await new GutendexImporter(http, db).ImportAsync(maxPages: 100, startPage: 225);
 
 var arxivCategories = new[]
 {
