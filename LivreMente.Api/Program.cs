@@ -16,6 +16,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<LivreMenteDbContext>(opt =>
     opt.UseNpgsql(connectionString, o =>
     {
+        o.MapEnum<Gender>("gender_enum");
         o.MapEnum<PublicationSource>("source_enum");
         o.MapEnum<PublicationType>("type_enum");
         o.MapEnum<ReadingStatus>("reading_status_enum");

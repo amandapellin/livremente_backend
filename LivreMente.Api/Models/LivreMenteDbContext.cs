@@ -39,6 +39,7 @@ public partial class LivreMenteDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
+            .HasPostgresEnum<Gender>("gender_enum")
             .HasPostgresEnum<PreferenceType>("preference_type_enum")
             .HasPostgresEnum<ReadingStatus>("reading_status_enum")
             .HasPostgresEnum<PublicationSource>("source_enum")
@@ -296,9 +297,7 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.FullName)
                 .HasMaxLength(255)
                 .HasColumnName("full_name");
-            entity.Property(e => e.Gender)
-                .HasMaxLength(30)
-                .HasColumnName("gender");
+            entity.Property(e => e.Gender).HasColumnName("gender");
             entity.Property(e => e.LastLoginAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("last_login_at");
