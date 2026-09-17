@@ -36,12 +36,25 @@ public class GenreService(LivreMenteDbContext db) : IGenreService
 
         var query = _db.Publications
             .Where(p => p.Genres.Any(g => g.Id == genreId))
-            .OrderByDescending(p => p.DownloadCount);
+            .OrderByDescending(p => p.DownloadCount)
+            .ThenBy(p => p.Id);
 
         var total = await query.CountAsync(ct);
 
+        // O offset é calculado em long para evitar overflow de int quando
+        // "page" é muito grande (ex.: int.MaxValue): (page - 1) * pageSize em
+        // int estouraria para um valor negativo. Se o offset ultrapassa o
+        // total, não há itens a retornar; devolvemos uma página vazia sem
+        // consultar o banco. Caso contrário, offset < total <= int.MaxValue,
+        // então o cast para int é seguro.
+        long offset = (long)(page - 1) * pageSize;
+        if (offset >= total)
+        {
+            return new PagedResult<PublicationSummaryDto>([], page, pageSize, total);
+        }
+
         var items = await query
-            .Skip((page - 1) * pageSize)
+            .Skip((int)offset)
             .Take(pageSize)
             .Select(p => new PublicationSummaryDto(
                 p.Id,
