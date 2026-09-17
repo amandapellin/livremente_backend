@@ -38,7 +38,7 @@ Se você não tem essas credenciais, peça a quem configurou o servidor — elas
 
 ```bash
 dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=<host>;Port=5432;Database=livremente_db;Username=livremente_app;Password=<senha>;SSL Mode=Require;Trust Server Certificate=true"
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=<host>;Port=5432;Database=livre_mente_dev;Username=livremente_app;Password=<senha>;SSL Mode=Require;Trust Server Certificate=true"
 ```
 
 O `SSL Mode=Require` é obrigatório — o Azure Flexible Server recusa conexões sem SSL.
@@ -111,18 +111,18 @@ Recomenda-se rodar num momento em que o computador não seja necessário para ou
 
 ### Rodando de novo sem duplicar
 
-O importador é seguro para rodar mais de uma vez: cada material é verificado pelo par `source` + `external_id` antes de ser inserido (é a mesma `UNIQUE (source, external_id)` já definida no schema do banco). Itens já importados são pulados automaticamente, então rodar novamente só traz o que ainda não existe no catálogo — útil, por exemplo, se a importação for interrompida no meio e precisar ser retomada.
+O importador é seguro para rodar mais de uma vez: cada publicação é verificada pelo par `source` + `external_id` antes de ser inserida (é a mesma `UNIQUE (source, external_id)` já definida no schema do banco). Itens já importados são pulados automaticamente, então rodar novamente só traz o que ainda não existe no catálogo — útil, por exemplo, se a importação for interrompida no meio e precisar ser retomada.
 
 ### Verificando o resultado
 
 ```sql
-SELECT source, type, COUNT(*) FROM material GROUP BY source, type;
+SELECT source, type, COUNT(*) FROM publication GROUP BY source, type;
 ```
 
 Esse comando no pgAdmin mostra quantos livros e artigos já foram importados de cada fonte. Para ver a distribuição de artigos por área do conhecimento:
 
 ```sql
-SELECT knowledge_area, COUNT(*) FROM material WHERE source = 'arxiv' GROUP BY knowledge_area ORDER BY COUNT(*) DESC;
+SELECT knowledge_area, COUNT(*) FROM publication WHERE source = 'arxiv' GROUP BY knowledge_area ORDER BY COUNT(*) DESC;
 ```
 ## Padrão de commits
 

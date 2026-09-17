@@ -11,6 +11,7 @@ var config = new ConfigurationBuilder()
 var optionsBuilder = new DbContextOptionsBuilder<LivreMenteDbContext>();
 optionsBuilder.UseNpgsql(config.GetConnectionString("DefaultConnection"), o =>
 {
+    o.MapEnum<Gender>("gender_enum");
     o.MapEnum<PublicationSource>("source_enum");
     o.MapEnum<PublicationType>("type_enum");
     o.MapEnum<ReadingStatus>("reading_status_enum");
@@ -20,7 +21,7 @@ optionsBuilder.UseNpgsql(config.GetConnectionString("DefaultConnection"), o =>
 using var db = new LivreMenteDbContext(optionsBuilder.Options);
 using var http = new HttpClient();
 
-await new GutendexImporter(http, db).ImportAsync(maxPages: 100, startPage: 225);
+await new GutendexImporter(http, db).ImportAsync(maxPages: 100, startPage: 606);
 
 var arxivCategories = new[]
 {
