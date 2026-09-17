@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using LivreMente.Api.Models.Enums;
 
 namespace LivreMente.Api.Models;
 
@@ -15,7 +16,7 @@ public partial class User
 
     public DateOnly BirthDate { get; set; }
 
-    public string Gender { get; set; } = null!;
+    public Gender Gender { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
