@@ -78,7 +78,7 @@ A API sobe, por padrão, em `https://localhost:<porta>` (a porta exata aparece n
 
 - Branches: `feature/rf01-cadastro-usuario` (código do requisito + descrição curta)
 - Pull requests devem referenciar a issue correspondente (`Closes #12`) e passar por revisão da outra desenvolvedora antes do merge
-- Board de acompanhamento: [Project "Livremente"](https://github.com/users/amandapellin/projects/1)
+- Board de acompanhamento: [Project "Livremente"](https://github.com/users/amandapellin/projects/3)
 
 ## Populando o catálogo
 
