@@ -9,7 +9,7 @@ public partial class Genre
 
     public string Name { get; set; } = null!;
 
-    public virtual ICollection<Publication> Publications { get; set; } = new List<Publication>();
+    public virtual ICollection<Publication> Publications { get; set; } = [];
 
-    public virtual ICollection<User> Users { get; set; } = new List<User>();
+    public virtual ICollection<User> Users { get; set; } = [];
 }
