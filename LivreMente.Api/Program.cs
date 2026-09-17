@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using LivreMente.Api.Models;
 using LivreMente.Api.Models.Enums;
+using LivreMente.Api.Endpoints;
+using LivreMente.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +21,9 @@ builder.Services.AddDbContext<LivreMenteDbContext>(opt =>
         o.MapEnum<ReadingStatus>("reading_status_enum");
         o.MapEnum<PreferenceType>("preference_type_enum");
     }));
+
+// Camada de serviços (regra de negócio).
+builder.Services.AddScoped<IGenreService, GenreService>();
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 
@@ -44,6 +49,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
+app.MapGenreEndpoints();
+
 app.Run();
 
