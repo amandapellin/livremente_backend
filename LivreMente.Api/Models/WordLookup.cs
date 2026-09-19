@@ -13,7 +13,7 @@ public partial class WordLookup
 
     public string Word { get; set; } = null!;
 
-    public DateTime ConsultedAt { get; set; }
+    public DateTime ConsultDate { get; set; }
 
     public virtual Publication Publication { get; set; } = null!;
 

@@ -3,6 +3,7 @@ using LivreMente.Api.Models;
 using LivreMente.Api.Models.Enums;
 using LivreMente.Api.Endpoints;
 using LivreMente.Api.Services;
+using LivreMente.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,8 @@ builder.Services.AddDbContext<LivreMenteDbContext>(opt =>
 
 // Camada de serviços (regra de negócio).
 builder.Services.AddScoped<IGenreService, GenreService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 
@@ -53,6 +56,7 @@ app.UseHttpsRedirection();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapGenreEndpoints();
+app.MapAuthEndpoints();
 
 app.Run();
 

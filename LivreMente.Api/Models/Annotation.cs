@@ -17,7 +17,7 @@ public partial class Annotation
 
     public string EpubPosition { get; set; } = null!;
 
-    public DateTime CreatedAt { get; set; }
+    public DateTime CreateDate { get; set; }
 
     public virtual Publication Publication { get; set; } = null!;
 

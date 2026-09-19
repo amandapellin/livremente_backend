@@ -11,9 +11,9 @@ public partial class ReadingSession
 
     public int PublicationId { get; set; }
 
-    public DateTime StartedAt { get; set; }
+    public DateTime StartTime { get; set; }
 
-    public DateTime? EndedAt { get; set; }
+    public DateTime? EndTime { get; set; }
 
     public virtual Publication Publication { get; set; } = null!;
 

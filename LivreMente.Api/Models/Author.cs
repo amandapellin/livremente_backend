@@ -13,5 +13,5 @@ public partial class Author
 
     public int? DeathYear { get; set; }
 
-    public virtual ICollection<Publication> Publications { get; set; } = new List<Publication>();
+    public virtual ICollection<Publication> Publications { get; set; } = [];
 }
