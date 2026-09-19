@@ -55,10 +55,10 @@ public partial class LivreMenteDbContext : DbContext
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
             entity.Property(e => e.Content).HasColumnName("content");
-            entity.Property(e => e.CreatedAt)
+            entity.Property(e => e.CreateDate)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
-                .HasColumnName("created_at");
+                .HasColumnName("create_date");
             entity.Property(e => e.EpubPosition)
                 .HasMaxLength(255)
                 .HasColumnName("epub_position");
@@ -118,10 +118,10 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.Id)
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
-            entity.Property(e => e.CreatedAt)
+            entity.Property(e => e.CreateDate)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
-                .HasColumnName("created_at");
+                .HasColumnName("create_date");
             entity.Property(e => e.EpubPosition)
                 .HasMaxLength(255)
                 .HasColumnName("epub_position");
@@ -227,13 +227,13 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.Id)
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
-            entity.Property(e => e.EndedAt)
+            entity.Property(e => e.EndTime)
                 .HasColumnType("timestamp without time zone")
-                .HasColumnName("ended_at");
+                .HasColumnName("end_time");
             entity.Property(e => e.PublicationId).HasColumnName("publication_id");
-            entity.Property(e => e.StartedAt)
+            entity.Property(e => e.StartTime)
                 .HasColumnType("timestamp without time zone")
-                .HasColumnName("started_at");
+                .HasColumnName("start_time");
             entity.Property(e => e.UserId).HasColumnName("user_id");
 
             entity.HasOne(d => d.Publication).WithMany(p => p.ReadingSessions)
@@ -287,10 +287,10 @@ public partial class LivreMenteDbContext : DbContext
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
             entity.Property(e => e.BirthDate).HasColumnName("birth_date");
-            entity.Property(e => e.CreatedAt)
+            entity.Property(e => e.CreateDate)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
-                .HasColumnName("created_at");
+                .HasColumnName("create_date");
             entity.Property(e => e.Email)
                 .HasMaxLength(254)
                 .HasColumnName("email");
@@ -298,16 +298,16 @@ public partial class LivreMenteDbContext : DbContext
                 .HasMaxLength(255)
                 .HasColumnName("full_name");
             entity.Property(e => e.Gender).HasColumnName("gender");
-            entity.Property(e => e.LastLoginAt)
+            entity.Property(e => e.LastLoginDate)
                 .HasColumnType("timestamp without time zone")
-                .HasColumnName("last_login_at");
+                .HasColumnName("last_login_date");
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(70)
                 .HasColumnName("password_hash");
-            entity.Property(e => e.UpdatedAt)
+            entity.Property(e => e.UpdateDate)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
-                .HasColumnName("updated_at");
+                .HasColumnName("update_date");
 
             entity.HasMany(d => d.Genres).WithMany(p => p.Users)
                 .UsingEntity<Dictionary<string, object>>(
@@ -339,9 +339,10 @@ public partial class LivreMenteDbContext : DbContext
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.PreferenceType).HasColumnName("preference_type");
             entity.Property(e => e.PreferenceValue)
                 .HasMaxLength(100)
-                .HasColumnName("value");
+                .HasColumnName("preference_value");
 
             entity.HasOne(d => d.User).WithMany(p => p.UserPreferences)
                 .HasForeignKey(d => d.UserId)
@@ -362,10 +363,10 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.Id)
                 .UseIdentityAlwaysColumn()
                 .HasColumnName("id");
-            entity.Property(e => e.ConsultedAt)
+            entity.Property(e => e.ConsultDate)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp without time zone")
-                .HasColumnName("consulted_at");
+                .HasColumnName("consult_date");
             entity.Property(e => e.PublicationId).HasColumnName("publication_id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.Property(e => e.Word)

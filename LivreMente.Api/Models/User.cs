@@ -18,23 +18,23 @@ public partial class User
 
     public Gender Gender { get; set; }
 
-    public DateTime CreatedAt { get; set; }
+    public DateTime CreateDate { get; set; }
 
-    public DateTime UpdatedAt { get; set; }
+    public DateTime UpdateDate { get; set; }
 
-    public DateTime? LastLoginAt { get; set; }
+    public DateTime? LastLoginDate { get; set; }
 
-    public virtual ICollection<Annotation> Annotations { get; set; } = new List<Annotation>();
+    public virtual ICollection<Annotation> Annotations { get; set; } = [];
 
-    public virtual ICollection<Highlight> Highlights { get; set; } = new List<Highlight>();
+    public virtual ICollection<Highlight> Highlights { get; set; } = [];
 
-    public virtual ICollection<ReadingSession> ReadingSessions { get; set; } = new List<ReadingSession>();
+    public virtual ICollection<ReadingSession> ReadingSessions { get; set; } = [];
 
-    public virtual ICollection<Shelf> Shelves { get; set; } = new List<Shelf>();
+    public virtual ICollection<Shelf> Shelves { get; set; } = [];
 
-    public virtual ICollection<UserPreference> UserPreferences { get; set; } = new List<UserPreference>();
+    public virtual ICollection<UserPreference> UserPreferences { get; set; } = [];
 
-    public virtual ICollection<WordLookup> WordLookups { get; set; } = new List<WordLookup>();
+    public virtual ICollection<WordLookup> WordLookups { get; set; } = [];
 
-    public virtual ICollection<Genre> Genres { get; set; } = new List<Genre>();
+    public virtual ICollection<Genre> Genres { get; set; } = [];
 }

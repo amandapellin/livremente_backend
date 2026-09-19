@@ -34,17 +34,17 @@ public partial class Publication
 
     public bool CopyrightFlag { get; set; }
 
-    public virtual ICollection<Annotation> Annotations { get; set; } = new List<Annotation>();
+    public virtual ICollection<Annotation> Annotations { get; set; } = [];
 
-    public virtual ICollection<Highlight> Highlights { get; set; } = new List<Highlight>();
+    public virtual ICollection<Highlight> Highlights { get; set; } = [];
 
-    public virtual ICollection<ReadingSession> ReadingSessions { get; set; } = new List<ReadingSession>();
+    public virtual ICollection<ReadingSession> ReadingSessions { get; set; } = [];
 
-    public virtual ICollection<Shelf> Shelves { get; set; } = new List<Shelf>();
+    public virtual ICollection<Shelf> Shelves { get; set; } = [];
 
-    public virtual ICollection<WordLookup> WordLookups { get; set; } = new List<WordLookup>();
+    public virtual ICollection<WordLookup> WordLookups { get; set; } = [];
 
-    public virtual ICollection<Author> Authors { get; set; } = new List<Author>();
+    public virtual ICollection<Author> Authors { get; set; } = [];
 
-    public virtual ICollection<Genre> Genres { get; set; } = new List<Genre>();
+    public virtual ICollection<Genre> Genres { get; set; } = [];
 }
