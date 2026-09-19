@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using LivreMente.Api.Dtos;
+using LivreMente.Api.Email;
 using LivreMente.Api.Mappings;
 using LivreMente.Api.Models;
 using LivreMente.Api.Models.Enums;
@@ -14,10 +15,21 @@ namespace LivreMente.Api.Services;
 /// preferências de leitura numa única transação (um só SaveChanges).
 /// Pressupõe que o payload já passou por <c>RegisterValidation</c>.
 /// </summary>
-public class AuthService(LivreMenteDbContext db, IPasswordHasher passwordHasher) : IAuthService
+public class AuthService(
+    LivreMenteDbContext db,
+    IPasswordHasher passwordHasher,
+    IEmailSender emailSender,
+    IConfiguration configuration,
+    ILogger<AuthService> logger) : IAuthService
 {
     private readonly LivreMenteDbContext _db = db;
     private readonly IPasswordHasher _passwordHasher = passwordHasher;
+    private readonly IEmailSender _emailSender = emailSender;
+    private readonly IConfiguration _configuration = configuration;
+    private readonly ILogger<AuthService> _logger = logger;
+
+    /// <summary>Timestamp UTC como Unspecified — exigido pelas colunas `timestamp without time zone`.</summary>
+    private static DateTime Now() => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 
     public async Task<RegisterResult> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
     {
@@ -37,6 +49,15 @@ public class AuthService(LivreMenteDbContext db, IPasswordHasher passwordHasher)
 
         await ApplyPreferencesAsync(user, request.Preferences, ct);
 
+        // Token de confirmação (RN01): usuário nasce não confirmado (EmailConfirmedAt = null).
+        var ttlHours = _configuration.GetValue<int?>("App:EmailConfirmationTtlHours") ?? 24;
+        var (plainToken, tokenHash) = ConfirmationTokens.Create();
+        user.EmailConfirmations.Add(new EmailConfirmation
+        {
+            TokenHash = tokenHash,
+            ExpiresAt = Now().AddHours(ttlHours),
+        });
+
         _db.Users.Add(user);
 
         try
@@ -50,7 +71,52 @@ public class AuthService(LivreMenteDbContext db, IPasswordHasher passwordHasher)
             return new RegisterResult(RegisterError.EmailAlreadyExists);
         }
 
+        // Envio após o commit: falha de e-mail não desfaz o cadastro (permite reenvio futuro).
+        await SendConfirmationEmailAsync(user.Email, plainToken, ct);
+
         return new RegisterResult(RegisterError.None, user.Id);
+    }
+
+    public async Task<ConfirmResult> ConfirmAsync(string token, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return ConfirmResult.InvalidOrExpired;
+
+        var hash = ConfirmationTokens.Hash(token);
+        var confirmation = await _db.EmailConfirmations
+            .Include(c => c.User)
+            .FirstOrDefaultAsync(c => c.TokenHash == hash, ct);
+
+        if (confirmation is null || confirmation.ConfirmedAt is not null || confirmation.ExpiresAt <= Now())
+            return ConfirmResult.InvalidOrExpired;
+
+        var now = Now();
+        confirmation.ConfirmedAt = now;
+        confirmation.User.EmailConfirmedAt = now;
+        await _db.SaveChangesAsync(ct);
+
+        return ConfirmResult.Confirmed;
+    }
+
+    private async Task SendConfirmationEmailAsync(string email, string plainToken, CancellationToken ct)
+    {
+        var apiBaseUrl = (_configuration["App:PublicApiBaseUrl"] ?? "http://localhost:5091").TrimEnd('/');
+        var link = $"{apiBaseUrl}/api/auth/confirm?token={plainToken}";
+        var body = $"""
+            <p>Bem-vindo(a) ao LivreMente!</p>
+            <p>Confirme seu cadastro clicando no link abaixo:</p>
+            <p><a href="{link}">Confirmar minha conta</a></p>
+            <p>Se você não criou esta conta, ignore este e-mail.</p>
+            """;
+
+        try
+        {
+            await _emailSender.SendAsync(email, "Confirme seu cadastro no LivreMente", body, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao enviar e-mail de confirmação para {Email}.", email);
+        }
     }
 
     /// <summary>

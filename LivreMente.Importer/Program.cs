@@ -21,7 +21,7 @@ optionsBuilder.UseNpgsql(config.GetConnectionString("DefaultConnection"), o =>
 using var db = new LivreMenteDbContext(optionsBuilder.Options);
 using var http = new HttpClient();
 
-await new GutendexImporter(http, db).ImportAsync(maxPages: 100, startPage: 606);
+await new GutendexImporter(http, db).ImportAsync(maxPages: 100, startPage: 1421);
 
 var arxivCategories = new[]
 {
@@ -31,9 +31,9 @@ var arxivCategories = new[]
     "cat:physics*", "cat:q-bio*", "cat:q-fin*", "cat:quant-ph*", "cat:stat*"
 };
 
-foreach (var category in arxivCategories)
-{
-    await new ArxivImporter(http, db).ImportAsync(searchQuery: category, totalResults: 150);
-}
+//foreach (var category in arxivCategories)
+//{
+//    await new ArxivImporter(http, db).ImportAsync(searchQuery: category, totalResults: 150);
+//}
 
 Console.WriteLine("Importação concluída.");

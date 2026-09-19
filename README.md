@@ -73,6 +73,62 @@ A API sobe, por padrão, em `https://localhost:<porta>` (a porta exata aparece n
 | `ConnectionStrings:DefaultConnection` | User Secrets (dev) / variável de ambiente (produção) | String de conexão do PostgreSQL |
 | `Jwt:Key` | User Secrets (dev) / variável de ambiente (produção) | Chave usada para assinar os tokens JWT |
 | `Jwt:Issuer` / `Jwt:Audience` | `appsettings.json` (não sensível) | Metadados do token JWT |
+| `Email:Provider` | `appsettings.json` (dev: `Logging`) / variável de ambiente (prod: `Smtp`) | Seleciona o provedor de e-mail sem mudar código |
+| `Email:Smtp:Host` / `Port` / `Username` / `Password` / `FromAddress` / `FromName` | User Secrets (dev/staging) / variável de ambiente (produção) | Credenciais SMTP quando `Email:Provider = Smtp` |
+| `App:FrontendBaseUrl` / `App:PublicApiBaseUrl` | `appsettings.json` por ambiente | URLs base do link de confirmação e do redirect pós-confirmação |
+
+## Configuração de e-mail (confirmação de cadastro)
+
+O envio de e-mail (RN01) é abstraído por `IEmailSender`; a implementação é escolhida pela chave `Email:Provider`, **sem mudança de código** — a mesma build roda nos três ambientes, mudando só a configuração. Segredos (usuário/senha SMTP) **nunca** vão no `appsettings.json`: use User Secrets em dev e variáveis de ambiente em produção.
+
+> Copie sempre Host/Port/Username/Password **da tela de SMTP do Mailtrap** (é a fonte da verdade; os valores abaixo são o formato esperado).
+
+### 1. Dev (padrão) — sem configurar nada
+
+`Email:Provider = "Logging"` já vem no `appsettings.json`. Nenhum e-mail é enviado: o link de confirmação é **impresso no console/log** (`[E-mail DEV]`). Basta rodar a API e copiar o link do log.
+
+### 2. Dev / Staging — Mailtrap **Email Testing** (sandbox: captura, não entrega)
+
+Ideal para inspecionar o e-mail numa UI sem entregar a ninguém.
+
+1. Crie uma conta no Mailtrap → produto **Email Testing** → um **Inbox**.
+2. No inbox, abra **Integrations → SMTP Settings** e copie Host / Port / Username / Password.
+3. Configure via User Secrets (dentro de `LivreMente.Api`):
+
+```bash
+dotnet user-secrets set "Email:Provider" "Smtp"
+dotnet user-secrets set "Email:Smtp:Host" "sandbox.smtp.mailtrap.io"
+dotnet user-secrets set "Email:Smtp:Port" "587"
+dotnet user-secrets set "Email:Smtp:Username" "<username do inbox>"
+dotnet user-secrets set "Email:Smtp:Password" "<password do inbox>"
+dotnet user-secrets set "Email:Smtp:FromAddress" "no-reply@livremente.test"
+dotnet user-secrets set "Email:Smtp:FromName" "LivreMente"
+```
+
+4. Cadastre um usuário: o e-mail aparece no inbox do Mailtrap (no sandbox o `FromAddress` pode ser qualquer um — é apenas capturado).
+
+### 3. Produção (demo acadêmica) — Mailtrap **Email Sending** (plano free)
+
+Produto **diferente** do sandbox: aqui o e-mail é **entregue de verdade**.
+
+1. No Mailtrap, vá em **Email Sending → Sending Domains**.
+2. Sem domínio próprio, use o **domínio de demonstração** que o Mailtrap oferece (algo como `demomailtrap.co`): ele entrega **apenas para o e-mail da própria conta**, o que basta para demonstrar o fluxo. (Para enviar a qualquer destinatário, seria preciso verificar um domínio seu com registros SPF/DKIM/DMARC.)
+3. Em **SMTP/API Settings** do Email Sending, copie Host / Username / Password.
+4. Configure por **variável de ambiente** no serviço de deploy (não User Secrets), usando `__` para aninhar as chaves:
+
+```bash
+Email__Provider=Smtp
+Email__Smtp__Host=live.smtp.mailtrap.io
+Email__Smtp__Port=587
+Email__Smtp__Username=<username do Email Sending>
+Email__Smtp__Password=<token/senha do Email Sending>
+Email__Smtp__FromAddress=no-reply@demomailtrap.co   # deve pertencer ao domínio (demo ou verificado)
+Email__Smtp__FromName=LivreMente
+```
+
+5. Ajuste também `App:PublicApiBaseUrl` e `App:FrontendBaseUrl` para as URLs públicas do deploy — senão o link de confirmação e o redirect pós-confirmação apontam para `localhost`.
+
+> O `FromAddress` **precisa** pertencer ao domínio (de demonstração ou verificado) no Email Sending; caso contrário o envio é recusado. No sandbox essa exigência não existe.
 
 ## Fluxo de contribuição
 

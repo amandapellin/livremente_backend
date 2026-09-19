@@ -20,6 +20,8 @@ public partial class LivreMenteDbContext : DbContext
 
     public virtual DbSet<Author> Authors { get; set; }
 
+    public virtual DbSet<EmailConfirmation> EmailConfirmations { get; set; }
+
     public virtual DbSet<Genre> Genres { get; set; }
 
     public virtual DbSet<Highlight> Highlights { get; set; }
@@ -301,6 +303,9 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.LastLoginDate)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("last_login_date");
+            entity.Property(e => e.EmailConfirmedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("email_confirmed_at");
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(70)
                 .HasColumnName("password_hash");
@@ -382,6 +387,38 @@ public partial class LivreMenteDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("word_lookup_user_id_fkey");
+        });
+
+        modelBuilder.Entity<EmailConfirmation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("email_confirmation_pkey");
+
+            entity.ToTable("email_confirmation");
+
+            entity.HasIndex(e => e.TokenHash, "uq_email_confirmation_token").IsUnique();
+
+            entity.Property(e => e.Id)
+                .UseIdentityAlwaysColumn()
+                .HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TokenHash)
+                .HasMaxLength(64)
+                .HasColumnName("token_hash");
+            entity.Property(e => e.ExpiresAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("expires_at");
+            entity.Property(e => e.ConfirmedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("confirmed_at");
+            entity.Property(e => e.CreateDate)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("create_date");
+
+            entity.HasOne(d => d.User).WithMany(p => p.EmailConfirmations)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("email_confirmation_user_id_fkey");
         });
 
         OnModelCreatingPartial(modelBuilder);

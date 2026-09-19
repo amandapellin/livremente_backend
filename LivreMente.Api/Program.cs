@@ -4,6 +4,7 @@ using LivreMente.Api.Models.Enums;
 using LivreMente.Api.Endpoints;
 using LivreMente.Api.Services;
 using LivreMente.Api.Security;
+using LivreMente.Api.Email;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +29,11 @@ builder.Services.AddDbContext<LivreMenteDbContext>(opt =>
 builder.Services.AddScoped<IGenreService, GenreService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+// Provedor de e-mail selecionado por configuração: "Smtp" (real) ou "Logging" (dev, padrão).
+if (string.Equals(builder.Configuration["Email:Provider"], "Smtp", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+else
+    builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 
