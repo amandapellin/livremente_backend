@@ -14,7 +14,7 @@ Repositório do frontend: [livremente](https://github.com/amandapellin/livrement
 
 ## Pré-requisitos
 
-- [.NET SDK 8 (LTS)](https://dotnet.microsoft.com/download) ou superior
+- [.NET SDK 9 (LTS)](https://dotnet.microsoft.com/download) ou superior
 - Acesso ao servidor PostgreSQL do projeto no Azure (peça a credencial de aplicação a quem já configurou o banco — não é a mesma senha do administrador do Azure)
 - [pgAdmin](https://www.pgadmin.org/) (opcional, útil para inspecionar o banco diretamente)
 
