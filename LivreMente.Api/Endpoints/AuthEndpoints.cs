@@ -28,6 +28,16 @@ public static class AuthEndpoints
             return Results.Created($"/api/users/{result.UserId}", response);
         });
 
+        // Clicado a partir do link no e-mail (navegação do browser): confirma e
+        // redireciona para o /login do front com o resultado na query.
+        group.MapGet("/confirm", async (string? token, IAuthService auth, IConfiguration config, CancellationToken ct) =>
+        {
+            var result = await auth.ConfirmAsync(token ?? "", ct);
+            var frontendBaseUrl = (config["App:FrontendBaseUrl"] ?? "http://localhost:5173").TrimEnd('/');
+            var status = result == ConfirmResult.Confirmed ? "1" : "invalid";
+            return Results.Redirect($"{frontendBaseUrl}/login?confirmed={status}");
+        });
+
         return group;
     }
 }

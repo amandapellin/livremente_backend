@@ -24,7 +24,11 @@ public partial class User
 
     public DateTime? LastLoginDate { get; set; }
 
+    public DateTime? EmailConfirmedAt { get; set; }
+
     public virtual ICollection<Annotation> Annotations { get; set; } = [];
+
+    public virtual ICollection<EmailConfirmation> EmailConfirmations { get; set; } = [];
 
     public virtual ICollection<Highlight> Highlights { get; set; } = [];
 
