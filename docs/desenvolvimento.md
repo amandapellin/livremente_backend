@@ -135,3 +135,4 @@ tecnologias empregadas.*
 | Endpoints de gênero | — | Arquitetura em camadas (DTOs/Services/Endpoints); paginação; `PreferenceCatalog` |
 | #5 | RF01 — Cadastro de usuário | BCrypt (`IPasswordHasher`, *Strategy*); transação única (usuário + preferências); enum nativo `gender_enum`; validação e códigos HTTP do contrato |
 | #6 | RN01 — Confirmação por e-mail | MailKit/SMTP (`IEmailSender`, *Strategy*); token com *hash* e expiração; confirmação via redirecionamento ao front |
+| #7 | RN03 — Consentimento LGPD | Aceite obrigatório validado no cadastro (erro 400 sem consentimento); registro de data/hora em `users.lgpd_consented_at` |

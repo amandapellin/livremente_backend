@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using LivreMente.Api.Models.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -306,6 +306,9 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.EmailConfirmedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("email_confirmed_at");
+            entity.Property(e => e.LgpdConsentedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("lgpd_consented_at");
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(70)
                 .HasColumnName("password_hash");

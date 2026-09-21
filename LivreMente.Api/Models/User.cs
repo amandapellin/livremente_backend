@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using LivreMente.Api.Models.Enums;
 
@@ -25,6 +25,8 @@ public partial class User
     public DateTime? LastLoginDate { get; set; }
 
     public DateTime? EmailConfirmedAt { get; set; }
+
+    public DateTime? LgpdConsentedAt { get; set; }
 
     public virtual ICollection<Annotation> Annotations { get; set; } = [];
 
