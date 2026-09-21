@@ -45,6 +45,7 @@ public class AuthService(
             PasswordHash = _passwordHasher.Hash(request.Password!),
             BirthDate = DateOnly.Parse(request.BirthDate!, CultureInfo.InvariantCulture),
             Gender = Enum.Parse<Gender>(request.Gender!),
+            LgpdConsentedAt = Now(),
         };
 
         await ApplyPreferencesAsync(user, request.Preferences, ct);

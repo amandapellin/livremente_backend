@@ -20,7 +20,7 @@ Repositório do frontend: [livremente](https://github.com/amandapellin/livrement
 
 ## Configuração do banco de dados
 
-O banco já está criado, com as 13 tabelas do dicionário de dados prontas, porém ainda **sem dados**. A importação inicial do catálogo (Gutendex e arXiv) precisa ser executada manualmente.
+O banco já está criado, com as tabelas do dicionário de dados prontas, porém ainda **sem dados**. A importação inicial do catálogo (Gutendex e arXiv) precisa ser executada manualmente.
 ### 1. Obtenha as credenciais de conexão
 
 Você vai precisar de:
@@ -47,9 +47,15 @@ O `SSL Mode=Require` é obrigatório — o Azure Flexible Server recusa conexõe
 
 Se a aplicação não conseguir conectar (timeout, não erro de autenticação), o mais provável é seu IP não estar liberado. Confira no portal do Azure, em **Settings > Networking** do recurso do PostgreSQL, e adicione seu IP atual se necessário.
 
-### 4. (Só se o schema do banco mudar) Regenere os modelos
+### 4. (Só se o schema do banco mudar) Aplique a migração e regenere os modelos
 
-Como o projeto é Database First, os modelos C# são gerados a partir do banco, não o contrário. Se alguma tabela for alterada diretamente no banco, regenere com:
+Mudanças de esquema são versionadas como **scripts SQL em `docs/sql/`** e aplicadas pelo **administrador/owner** do banco (`livremente_admin`) — o role de aplicação (`livremente_app`) tem apenas permissões de dados (DML) e **não pode** alterar o esquema (`CREATE`/`ALTER`/`DROP`, inclusive tipos enum). Exemplo:
+
+```bash
+psql "host=<host> port=5432 dbname=livre_mente_dev user=livremente_admin sslmode=require" -f docs/sql/<script>.sql
+```
+
+Como o projeto é Database First, os modelos C# são gerados a partir do banco, não o contrário. Depois de aplicar a mudança, regenere com:
 
 ```bash
 dotnet ef dbcontext scaffold "Name=ConnectionStrings:DefaultConnection" Npgsql.EntityFrameworkCore.PostgreSQL -o Models --context LivreMenteDbContext --force

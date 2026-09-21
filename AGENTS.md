@@ -137,12 +137,13 @@ corresponder aos `value` das opções do front.**
 - Endpoints de gênero (`GET /api/genres`, `/{id}`, `/{id}/publications`) — molde da arquitetura em camadas.
 - **#5 (RF01) Cadastro:** `POST /api/auth/register` composto (usuário + preferências em uma transação), BCrypt, tradução via `PreferenceCatalog`, 201/409/400. Usuário nasce **não confirmado**.
 - **#6 (RN01) Confirmação de e-mail:** token com *hash* + expiração (tabela `email_confirmation`, coluna `users.email_confirmed_at`), `IEmailSender` (Logging/SMTP-MailKit), `GET /api/auth/confirm` redireciona ao front.
+- **#7 (RN03) Consentimento LGPD:** o cadastro exige `lgpdConsent = true` (validação → 400) e registra a data/hora do aceite em `users.lgpd_consented_at`. Migração em `docs/sql/issue_7_add_lgpd_consent.sql` (rodar como admin).
 
 **Próximas / dependências conhecidas:**
 - **#8 (RF02) Login com JWT:** deve **rejeitar** usuários com `email_confirmed_at IS NULL`.
 - **#11/#12 (RF04) Preferências:** reaproveitar a lógica de `ApplyPreferences` do `AuthService` (extrair para um serviço de preferências).
 - **#10 (RF03) Edição de perfil:** rotas `/api/users/me/...`.
-- Follow-ups: reenvio de confirmação; persistência do consentimento LGPD (falta coluna); provedor SMTP real em produção (só configuração).
+- Follow-ups: reenvio de confirmação; provedor SMTP real em produção (só configuração); persistência do consentimento de *marketing* (opt-in opcional, ainda não gravado).
 
 ## 10. Documentos relacionados
 
