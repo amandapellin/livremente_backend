@@ -18,15 +18,21 @@ namespace LivreMente.Api.Services;
 public class AuthService(
     LivreMenteDbContext db,
     IPasswordHasher passwordHasher,
+    IJwtTokenService jwtTokenService,
     IEmailSender emailSender,
     IConfiguration configuration,
     ILogger<AuthService> logger) : IAuthService
 {
     private readonly LivreMenteDbContext _db = db;
     private readonly IPasswordHasher _passwordHasher = passwordHasher;
+    private readonly IJwtTokenService _jwtTokenService = jwtTokenService;
     private readonly IEmailSender _emailSender = emailSender;
     private readonly IConfiguration _configuration = configuration;
     private readonly ILogger<AuthService> _logger = logger;
+
+    // Hash fixo usado para equalizar o tempo de resposta quando o e-mail não
+    // existe (anti-enumeração por timing). Calculado uma vez por processo.
+    private static string? _timingHash;
 
     /// <summary>Timestamp UTC como Unspecified — exigido pelas colunas `timestamp without time zone`.</summary>
     private static DateTime Now() => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
@@ -52,7 +58,7 @@ public class AuthService(
 
         // Token de confirmação (RN01): usuário nasce não confirmado (EmailConfirmedAt = null).
         var ttlHours = _configuration.GetValue<int?>("App:EmailConfirmationTtlHours") ?? 24;
-        var (plainToken, tokenHash) = ConfirmationTokens.Create();
+        var (plainToken, tokenHash) = OpaqueTokens.Create();
         user.EmailConfirmations.Add(new EmailConfirmation
         {
             TokenHash = tokenHash,
@@ -83,7 +89,7 @@ public class AuthService(
         if (string.IsNullOrWhiteSpace(token))
             return ConfirmResult.InvalidOrExpired;
 
-        var hash = ConfirmationTokens.Hash(token);
+        var hash = OpaqueTokens.Hash(token);
         var confirmation = await _db.EmailConfirmations
             .Include(c => c.User)
             .FirstOrDefaultAsync(c => c.TokenHash == hash, ct);
@@ -97,6 +103,91 @@ public class AuthService(
         await _db.SaveChangesAsync(ct);
 
         return ConfirmResult.Confirmed;
+    }
+
+    public async Task<LoginResult> LoginAsync(LoginRequest request, CancellationToken ct = default)
+    {
+        var email = request.Email!.Trim();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+
+        // Usuário inexistente ou senha incorreta → mesma resposta (não revela qual).
+        if (user is null)
+        {
+            RunTimingEqualizingVerify(request.Password!); // gasta ~o mesmo tempo de um Verify real
+            return new LoginResult(LoginError.InvalidCredentials);
+        }
+
+        if (!_passwordHasher.Verify(request.Password!, user.PasswordHash))
+            return new LoginResult(LoginError.InvalidCredentials);
+
+        // Conta válida, mas ainda não confirmada (RN01).
+        if (user.EmailConfirmedAt is null)
+            return new LoginResult(LoginError.EmailNotConfirmed);
+
+        var accessToken = _jwtTokenService.CreateAccessToken(user);
+        var refreshPlain = IssueRefreshToken(user, request.RememberMe);
+        user.LastLoginDate = Now();
+        await _db.SaveChangesAsync(ct);
+
+        var response = new LoginResponse(accessToken, refreshPlain, ToAuthUser(user));
+        return new LoginResult(LoginError.None, response);
+    }
+
+    public async Task<RefreshResult> RefreshAsync(RefreshRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.RefreshToken))
+            return new RefreshResult(RefreshError.Invalid);
+
+        var hash = OpaqueTokens.Hash(request.RefreshToken);
+        var stored = await _db.RefreshTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
+
+        if (stored is null || stored.RevokedAt is not null || stored.ExpiresAt <= Now())
+            return new RefreshResult(RefreshError.Invalid);
+
+        // Rotação: revoga o token usado e emite um novo, mantendo a validade
+        // original (a sessão tem tempo máximo — a renovação não a estende para sempre).
+        stored.RevokedAt = Now();
+        var (plain, newHash) = OpaqueTokens.Create();
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = stored.UserId,
+            TokenHash = newHash,
+            ExpiresAt = stored.ExpiresAt,
+        });
+
+        var accessToken = _jwtTokenService.CreateAccessToken(stored.User);
+        await _db.SaveChangesAsync(ct);
+
+        return new RefreshResult(RefreshError.None, new RefreshResponse(accessToken, plain));
+    }
+
+    /// <summary>Cria e anexa um refresh token ao usuário; retorna o valor em claro.</summary>
+    private string IssueRefreshToken(User user, bool rememberMe)
+    {
+        var jwt = _configuration.GetSection("Jwt");
+        var days = rememberMe
+            ? (int.TryParse(jwt["RememberMeDays"], out var r) ? r : 30)
+            : (int.TryParse(jwt["RefreshTokenDays"], out var d) ? d : 1);
+
+        var (plain, hash) = OpaqueTokens.Create();
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = hash,
+            ExpiresAt = Now().AddDays(days),
+        });
+        return plain;
+    }
+
+    private static AuthUserDto ToAuthUser(User user) =>
+        new(user.Id.ToString(), user.FullName, user.Email);
+
+    private void RunTimingEqualizingVerify(string password)
+    {
+        _timingHash ??= _passwordHasher.Hash("timing-equalizer");
+        _passwordHasher.Verify(password, _timingHash);
     }
 
     private async Task SendConfirmationEmailAsync(string email, string plainToken, CancellationToken ct)

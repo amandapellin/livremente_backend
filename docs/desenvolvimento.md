@@ -78,6 +78,17 @@ substituição não afete as regras de negócio. Essa tecnologia foi introduzida
 implementação do cadastro de usuário (RF01): a senha nunca é armazenada em texto
 puro nem retornada nas respostas da API.
 
+No login (RF02), a autenticação emprega **JSON Web Tokens (JWT)**, com a
+biblioteca **JwtBearer** do ASP.NET Core. Após validar as credenciais (conferindo
+a senha contra o *hash*), o sistema emite um **token de acesso** assinado
+(HMAC-SHA256) contendo as *claims* do usuário e uma expiração curta; a geração é
+isolada por uma abstração (`IJwtTokenService`). Para manter a sessão sem reenviar
+a senha, emite-se também um **refresh token** de longa duração, persistido apenas
+como *hash* e **rotacionado** a cada renovação (o token usado é revogado). Por
+segurança, credenciais inválidas retornam sempre a mesma resposta genérica (sem
+revelar qual campo falhou), e contas ainda não confirmadas são bloqueadas no
+login.
+
 ### 3.1.6 Envio de e-mail (MailKit e SMTP)
 
 O envio de mensagens de correio eletrônico — utilizado na confirmação de
@@ -136,3 +147,4 @@ tecnologias empregadas.*
 | #5 | RF01 — Cadastro de usuário | BCrypt (`IPasswordHasher`, *Strategy*); transação única (usuário + preferências); enum nativo `gender_enum`; validação e códigos HTTP do contrato |
 | #6 | RN01 — Confirmação por e-mail | MailKit/SMTP (`IEmailSender`, *Strategy*); token com *hash* e expiração; confirmação via redirecionamento ao front |
 | #7 | RN03 — Consentimento LGPD | Aceite obrigatório validado no cadastro (erro 400 sem consentimento); registro de data/hora em `users.lgpd_consented_at` |
+| #8 / #9 | RF02 — Login com JWT (+ refresh) | Autenticação por **JWT** (HS256, `Microsoft.AspNetCore.Authentication.JwtBearer`, `IJwtTokenService` — *Strategy*); senha conferida por *hash*; **refresh token** persistido (só o *hash*) com rotação; 401 genérico (anti-enumeração); gate 403 para conta não confirmada |

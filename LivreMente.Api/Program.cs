@@ -1,4 +1,7 @@
+using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using LivreMente.Api.Models;
 using LivreMente.Api.Models.Enums;
 using LivreMente.Api.Endpoints;
@@ -29,11 +32,32 @@ builder.Services.AddDbContext<LivreMenteDbContext>(opt =>
 builder.Services.AddScoped<IGenreService, GenreService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 // Provedor de e-mail selecionado por configuração: "Smtp" (real) ou "Logging" (dev, padrão).
 if (string.Equals(builder.Configuration["Email:Provider"], "Smtp", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 else
     builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
+
+// Autenticação JWT: valida assinatura, emissor, audiência e expiração dos tokens.
+var jwtSection = builder.Configuration.GetSection("Jwt");
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSection["Issuer"],
+            ValidAudience = jwtSection["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSection["Key"]
+                    ?? throw new InvalidOperationException("Jwt:Key não configurado (User Secrets / variável de ambiente)."))),
+        };
+    });
+builder.Services.AddAuthorization();
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 
@@ -59,6 +83,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapGenreEndpoints();

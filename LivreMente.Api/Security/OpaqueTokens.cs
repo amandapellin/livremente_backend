@@ -4,14 +4,14 @@ using System.Text;
 namespace LivreMente.Api.Security;
 
 /// <summary>
-/// Geração e hashing de tokens de confirmação de e-mail. O token é aleatório de
-/// alta entropia (256 bits), então um hash rápido (SHA-256) é adequado — ao
-/// contrário de senhas, não precisa de BCrypt. Só o hash é persistido; o valor
-/// em claro viaja apenas no link do e-mail.
+/// Geração e hashing de tokens opacos de alta entropia (256 bits), usados para
+/// confirmação de e-mail e refresh token. Como são aleatórios, um hash rápido
+/// (SHA-256) basta — ao contrário de senhas, não precisam de BCrypt. Só o hash
+/// é persistido; o valor em claro viaja apenas para o cliente (link ou resposta).
 /// </summary>
-public static class ConfirmationTokens
+public static class OpaqueTokens
 {
-    /// <summary>Gera um novo token: retorna o valor em claro (para o link) e o hash (para persistir).</summary>
+    /// <summary>Gera um token: valor em claro (para o cliente) e o hash (para persistir).</summary>
     public static (string Plain, string Hash) Create()
     {
         var bytes = RandomNumberGenerator.GetBytes(32);
