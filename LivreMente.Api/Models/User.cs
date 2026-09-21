@@ -32,6 +32,8 @@ public partial class User
 
     public virtual ICollection<EmailConfirmation> EmailConfirmations { get; set; } = [];
 
+    public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = [];
+
     public virtual ICollection<Highlight> Highlights { get; set; } = [];
 
     public virtual ICollection<ReadingSession> ReadingSessions { get; set; } = [];
