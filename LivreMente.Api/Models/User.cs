@@ -26,11 +26,13 @@ public partial class User
 
     public DateTime? EmailConfirmedAt { get; set; }
 
+    public string? EmailConfirmationTokenHash { get; set; }
+
+    public DateTime? EmailConfirmationExpiresAt { get; set; }
+
     public DateTime? LgpdConsentedAt { get; set; }
 
     public virtual ICollection<Annotation> Annotations { get; set; } = [];
-
-    public virtual ICollection<EmailConfirmation> EmailConfirmations { get; set; } = [];
 
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = [];
 
