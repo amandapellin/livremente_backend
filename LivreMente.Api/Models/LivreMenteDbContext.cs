@@ -24,6 +24,8 @@ public partial class LivreMenteDbContext : DbContext
 
     public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
 
+    public virtual DbSet<UserAvatar> UserAvatars { get; set; }
+
     public virtual DbSet<Genre> Genres { get; set; }
 
     public virtual DbSet<Highlight> Highlights { get; set; }
@@ -456,6 +458,30 @@ public partial class LivreMenteDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("refresh_token_user_id_fkey");
+        });
+
+        modelBuilder.Entity<UserAvatar>(entity =>
+        {
+            entity.HasKey(e => e.UserId).HasName("user_avatar_pkey");
+
+            entity.ToTable("user_avatar");
+
+            entity.Property(e => e.UserId)
+                .ValueGeneratedNever()
+                .HasColumnName("user_id");
+            entity.Property(e => e.Content).HasColumnName("content");
+            entity.Property(e => e.ContentType)
+                .HasMaxLength(50)
+                .HasColumnName("content_type");
+            entity.Property(e => e.UpdateDate)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("update_date");
+
+            entity.HasOne(d => d.User).WithOne(p => p.Avatar)
+                .HasForeignKey<UserAvatar>(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("user_avatar_user_id_fkey");
         });
 
         OnModelCreatingPartial(modelBuilder);
