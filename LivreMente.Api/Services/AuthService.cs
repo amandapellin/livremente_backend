@@ -59,11 +59,8 @@ public class AuthService(
         // Token de confirmação (RN01): usuário nasce não confirmado (EmailConfirmedAt = null).
         var ttlHours = _configuration.GetValue<int?>("App:EmailConfirmationTtlHours") ?? 24;
         var (plainToken, tokenHash) = OpaqueTokens.Create();
-        user.EmailConfirmations.Add(new EmailConfirmation
-        {
-            TokenHash = tokenHash,
-            ExpiresAt = Now().AddHours(ttlHours),
-        });
+        user.EmailConfirmationTokenHash = tokenHash;
+        user.EmailConfirmationExpiresAt = Now().AddHours(ttlHours);
 
         _db.Users.Add(user);
 
@@ -90,16 +87,16 @@ public class AuthService(
             return ConfirmResult.InvalidOrExpired;
 
         var hash = OpaqueTokens.Hash(token);
-        var confirmation = await _db.EmailConfirmations
-            .Include(c => c.User)
-            .FirstOrDefaultAsync(c => c.TokenHash == hash, ct);
+        var user = await _db.Users
+            .FirstOrDefaultAsync(u => u.EmailConfirmationTokenHash == hash, ct);
 
-        if (confirmation is null || confirmation.ConfirmedAt is not null || confirmation.ExpiresAt <= Now())
+        if (user is null || user.EmailConfirmedAt is not null || user.EmailConfirmationExpiresAt <= Now())
             return ConfirmResult.InvalidOrExpired;
 
         var now = Now();
-        confirmation.ConfirmedAt = now;
-        confirmation.User.EmailConfirmedAt = now;
+        user.EmailConfirmedAt = now;
+        user.EmailConfirmationTokenHash = null;
+        user.EmailConfirmationExpiresAt = null;
         await _db.SaveChangesAsync(ct);
 
         return ConfirmResult.Confirmed;

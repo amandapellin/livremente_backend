@@ -84,7 +84,7 @@ cliente com orval (tipos + hooks + schemas Zod). Ao mudar o contrato do back,
 
 Entidades: `User`, `Publication` (antes "Material" — **renomeado**; tabela
 `publication`), `Author`, `Genre`, `UserPreference` (EAV), `Shelf`,
-`ReadingSession`, `Highlight`, `Annotation`, `WordLookup`, `EmailConfirmation`.
+`ReadingSession`, `Highlight`, `Annotation`, `WordLookup`.
 Relações M:N: `publication_genre`, `publication_author`, **`user_genre`** (não
 "user_genre_preference") e `user_genre` para preferências de gênero do usuário.
 
@@ -136,7 +136,7 @@ corresponder aos `value` das opções do front.**
 - Importação do catálogo (Gutendex + arXiv) via `LivreMente.Importer`.
 - Endpoints de gênero (`GET /api/genres`, `/{id}`, `/{id}/publications`) — molde da arquitetura em camadas.
 - **#5 (RF01) Cadastro:** `POST /api/auth/register` composto (usuário + preferências em uma transação), BCrypt, tradução via `PreferenceCatalog`, 201/409/400. Usuário nasce **não confirmado**.
-- **#6 (RN01) Confirmação de e-mail:** token com *hash* + expiração (tabela `email_confirmation`, coluna `users.email_confirmed_at`), `IEmailSender` (Logging/SMTP-MailKit), `GET /api/auth/confirm` redireciona ao front.
+- **#6 (RN01) Confirmação de e-mail:** token com *hash* + expiração (colunas em `users`: `email_confirmation_token_hash`, `email_confirmation_expires_at`, `email_confirmed_at`), `IEmailSender` (Logging/SMTP-MailKit), `GET /api/auth/confirm` redireciona ao front. (Refatorado: removida a tabela `email_confirmation`).
 - **#7 (RN03) Consentimento LGPD:** o cadastro exige `lgpdConsent = true` (validação → 400) e registra a data/hora do aceite em `users.lgpd_consented_at`. Migração em `docs/sql/issue_7_add_lgpd_consent.sql` (rodar como admin).
 - **#8 (RF02) Login com JWT + #9 (refresh):** `POST /api/auth/login` valida senha (`Verify`), rejeita conta não confirmada (**403 `EMAIL_NOT_CONFIRMED`**), emite JWT (HS256, `IJwtTokenService`) + refresh token persistido (tabela `refresh_token`, só o hash; TTL por `rememberMe`). `POST /api/auth/refresh` rotaciona (revoga o usado, emite novo). Credencial inválida → **401 genérico** (anti-enumeração por timing). Middleware `AddJwtBearer` habilitado (`[Authorize]` disponível). `Jwt:Key` em User Secrets; config `Jwt:*` no appsettings. Migração em `docs/sql/issue_8_add_refresh_token.sql`. Helper de token opaco renomeado `ConfirmationTokens` → `OpaqueTokens` (reusado por confirmação e refresh).
 - **#10 (RF03) Edição de perfil:** `UserService` + `UserEndpoints` sob `/api/users` com `RequireAuthorization()`. `GET /api/users/me` (inclui `avatarUrl`) e `PUT /api/users/me` (só o nome; e-mail somente-leitura) → 200 `UserProfileDto`. `PATCH /api/users/me/password` (senha atual + nova ≥ 8) → 204; atual incorreta → 422. **Avatar:** `PUT /api/users/me/avatar` (multipart, PNG/JPG por *magic bytes*, ≤ 2 MB, senão 422) grava bytes na tabela `user_avatar` (1:1); `GET /api/users/{id}/avatar` é **público** (`.AllowAnonymous()`) e serve a imagem. Identidade do claim `sub` (`ClaimsPrincipalExtensions.GetUserId`, `MapInboundClaims = false`) — **RN04 por construção** (sem `{id}`, sem IDOR). Migração do avatar em `docs/sql/issue_10_add_user_avatar.sql` (admin). Swagger com botão **Authorize** (JWT, `AddSecurityDefinition`). **Fora**: troca de e-mail (é somente-exibição).
