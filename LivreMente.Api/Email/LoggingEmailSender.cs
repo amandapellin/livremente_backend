@@ -2,8 +2,8 @@ namespace LivreMente.Api.Email;
 
 /// <summary>
 /// Implementação de desenvolvimento de <see cref="IEmailSender"/>: não envia
-/// e-mail de verdade — registra o conteúdo (incluindo o link de confirmação) no
-/// log, permitindo testar o fluxo sem um provedor SMTP.
+/// e-mail de verdade — registra apenas metadados seguros no log para permitir
+/// testar o fluxo sem um provedor SMTP.
 /// </summary>
 public class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSender
 {
