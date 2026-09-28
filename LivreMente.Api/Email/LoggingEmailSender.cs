@@ -11,7 +11,11 @@ public class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSend
 
     public Task SendAsync(string to, string subject, string htmlBody, CancellationToken ct = default)
     {
-        _logger.LogInformation("[E-mail DEV] Para: {To} | Assunto: {Subject}\n{Body}", to, subject, htmlBody);
+        var safeSubject = (subject ?? string.Empty).Replace("\r", string.Empty).Replace("\n", string.Empty);
+        _logger.LogInformation(
+            "[E-mail DEV] E-mail capturado em ambiente de desenvolvimento. Assunto: {Subject}",
+            safeSubject
+        );
         return Task.CompletedTask;
     }
 }
