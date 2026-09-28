@@ -26,12 +26,34 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
                 [], page, pageSize, 0);
         }
 
-        var escapedText = searchText
-            .Replace("\\", "\\\\")
-            .Replace("%", "\\%")
-            .Replace("_", "\\_");
+        // Normaliza a consulta para evitar que wildcards do SQL alterem a busca
+        // e para que entradas como "quixote", "quixote%", "don quixote"
+        // e "donquixote" sejam tratadas como a mesma busca por texto.
+        var normalizedText = searchText
+            .Trim()
+            .ToLowerInvariant()
+            .Normalize(System.Text.NormalizationForm.FormD);
 
-        var pattern = $"%{escapedText}%";
+        normalizedText = new string(
+            normalizedText
+                .Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                .ToArray())
+            .Replace("\\", string.Empty)
+            .Replace("%", string.Empty)
+            .Replace("_", string.Empty)
+            .Replace("$", string.Empty)
+            .Replace(" ", string.Empty)
+            .Replace("-", string.Empty)
+            .Replace("_", string.Empty)
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(normalizedText))
+        {
+            return new PagedResult<PublicationSummaryDto>(
+                [], page, pageSize, 0);
+        }
+
+        var pattern = $"%{normalizedText}%";
 
         var publications = _db.Publications
             .Where(p =>
