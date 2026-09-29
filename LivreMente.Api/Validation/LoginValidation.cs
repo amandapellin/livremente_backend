@@ -3,10 +3,6 @@ using LivreMente.Api.Dtos;
 
 namespace LivreMente.Api.Validation;
 
-/// <summary>
-/// Validação de forma do login (não de credenciais). Só garante que os campos
-/// vieram e têm formato plausível — credenciais que "não batem" são 401, não 400.
-/// </summary>
 public static class LoginValidation
 {
     public static string? Validate(LoginRequest req)

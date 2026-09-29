@@ -115,7 +115,41 @@ public static class UserEndpoints
                 return Results.Unauthorized();
 
             return Results.Ok(await preferences.ReplacePreferencesAsync(userId.Value, prefs!, ct));
-        });     
+        });
+
+        // Preferências de gênero literário (M:N user_genre) — #12 (RF04).
+
+        group.MapGet("/me/genres", async (ClaimsPrincipal principal, IPreferenceService preferences, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            return Results.Ok(await preferences.GetGenresAsync(userId.Value, ct));
+        });
+
+        group.MapPut("/me/genres", async (UpdateGenresRequest req, ClaimsPrincipal principal, IPreferenceService preferences, CancellationToken ct) =>
+        {
+            var (error, slugs) = GenrePreferenceValidation.Validate(req);
+            if (error is not null)
+                return Results.BadRequest(new ErrorResponse(error, "VALIDATION_ERROR"));
+
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            return Results.Ok(await preferences.ReplaceGenresAsync(userId.Value, slugs, ct));
+        });
+
+        group.MapDelete("/me/genres/{genreId:int}", async (int genreId, ClaimsPrincipal principal, IPreferenceService preferences, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var removed = await preferences.RemoveGenreAsync(userId.Value, genreId, ct);
+            return removed ? Results.NoContent() : Results.NotFound();
+        });
 
         return group;
     }

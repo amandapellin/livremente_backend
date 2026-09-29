@@ -1,6 +1,5 @@
 namespace LivreMente.Api.Dtos;
 
-/// <summary>Resumo de uma publicação para listagens (não expõe a entidade EF crua).</summary>
 public record PublicationSummaryDto(
     int Id,
     string Title,

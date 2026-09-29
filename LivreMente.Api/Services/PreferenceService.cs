@@ -23,9 +23,6 @@ public class PreferenceService(LivreMenteDbContext db) : IPreferenceService
                 .Select(r => r.PreferenceValue)
                 .OrderBy(v => v, StringComparer.Ordinal)];
 
-        // knowledge_area é gravado como archives do arXiv (traduzido no PUT). No GET,
-        // devolve os slugs de área do front (tradução reversa): um slug entra se TODOS
-        // os seus archives estão presentes — simétrico ao fan-out gravado.
         var storedAreas = rows
             .Where(r => r.PreferenceType == PreferenceType.knowledge_area)
             .Select(r => r.PreferenceValue)
@@ -75,5 +72,73 @@ public class PreferenceService(LivreMenteDbContext db) : IPreferenceService
 
         await _db.SaveChangesAsync(ct);
         return await GetPreferencesAsync(userId, ct);
+    }
+
+    public async Task<UserGenresDto> GetGenresAsync(int userId, CancellationToken ct = default)
+    {
+        var names = await _db.Users
+            .Where(u => u.Id == userId)
+            .SelectMany(u => u.Genres.Select(g => g.Name))
+            .ToListAsync(ct);
+
+        var stored = names.ToHashSet(StringComparer.Ordinal);
+
+        // Tradução reversa: um slug entra se TODOS os seus genre.names estão
+        // presentes — simétrico ao fan-out gravado no PUT/cadastro. As listas do
+        // catálogo são ~disjuntas, então a reversão é determinística.
+        IReadOnlyList<string> slugs =
+            [.. PreferenceCatalog.BookGenres
+                .Where(kv => kv.Value.Length > 0 && kv.Value.All(n => stored.Contains(n)))
+                .Select(kv => kv.Key)
+                .OrderBy(k => k, StringComparer.Ordinal)];
+
+        return new UserGenresDto(slugs);
+    }
+
+    public async Task<UserGenresDto> ReplaceGenresAsync(
+        int userId, IReadOnlyList<string> slugs, CancellationToken ct = default)
+    {
+        // slug → genre.name (fan-out via catálogo), consistente com o cadastro (#5).
+        var desiredNames = slugs
+            .SelectMany(s => PreferenceCatalog.BookGenres.TryGetValue(s, out var names) ? names : [])
+            .ToHashSet(StringComparer.Ordinal);
+
+        var user = await _db.Users
+            .Include(u => u.Genres)
+            .FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null)
+            return new UserGenresDto([]);
+
+        var desired = desiredNames.Count == 0
+            ? []
+            : await _db.Genres.Where(g => desiredNames.Contains(g.Name)).ToListAsync(ct);
+
+        // Substitui por diff: remove o que saiu, adiciona o que entrou; o EF
+        // traduz isso em DELETE/INSERT nas linhas de user_genre (PK user_id+genre_id).
+        var desiredIds = desired.Select(g => g.Id).ToHashSet();
+        var currentIds = user.Genres.Select(g => g.Id).ToHashSet();
+
+        foreach (var genre in user.Genres.Where(g => !desiredIds.Contains(g.Id)).ToList())
+            user.Genres.Remove(genre);
+        foreach (var genre in desired.Where(g => !currentIds.Contains(g.Id)))
+            user.Genres.Add(genre);
+
+        await _db.SaveChangesAsync(ct);
+        return await GetGenresAsync(userId, ct);
+    }
+
+    public async Task<bool> RemoveGenreAsync(int userId, int genreId, CancellationToken ct = default)
+    {
+        var user = await _db.Users
+            .Include(u => u.Genres)
+            .FirstOrDefaultAsync(u => u.Id == userId, ct);
+
+        var genre = user?.Genres.FirstOrDefault(g => g.Id == genreId);
+        if (genre is null)
+            return false;
+
+        user!.Genres.Remove(genre);
+        await _db.SaveChangesAsync(ct);
+        return true;
     }
 }
