@@ -21,7 +21,7 @@ optionsBuilder.UseNpgsql(config.GetConnectionString("DefaultConnection"), o =>
 using var db = new LivreMenteDbContext(optionsBuilder.Options);
 using var http = new HttpClient();
 
-await new GutendexImporter(http, db).ImportAsync(maxPages: 100, startPage: 1520);
+await new GutendexImporter(http, db).ImportAsync(maxPages: 100, startPage: 1762);
 
 var arxivCategories = new[]
 {
