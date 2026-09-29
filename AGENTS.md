@@ -145,6 +145,21 @@ corresponder aos `value` das opções do front.**
 - **#11/#12 (RF04) Preferências:** reaproveitar a lógica de `ApplyPreferences` do `AuthService` (extrair para um serviço de preferências). O front já consome `GET/PUT /api/users/me/preferences`.
 - Follow-ups: reenvio de confirmação; provedor SMTP real em produção (só configuração); persistência do consentimento de *marketing* (opt-in opcional, ainda não gravado).
 
+**Implementado / aguardando revisão e merge:**
+
+- **#18 (RF11) Busca por palavra-chave:** implementado
+  `GET /api/publications/search?query=...&page=1&pageSize=20`.
+  Pesquisa título e autores, ignorando maiúsculas/minúsculas e
+  acentuação com `ILIKE` e `unaccent`. Reutiliza
+  `PagedResult<PublicationSummaryDto>`, com paginação e tratamento
+  de caracteres especiais. Script em
+  `docs/sql/issue_18_enable_unaccent.sql` (executar como admin;
+  requer UNACCENT permitido em azure.extensions no Azure).
+  Testes HTTP manuais realizados antes da integração de develop;
+  build Release aprovado após a integração.
+  Pendentes: atualização do OpenAPI/cliente do front e repetição
+  dos testes HTTP após reiniciar a API com o código integrado.
+
 ## 10. Documentos relacionados
 
 - `README.md` — setup do banco, execução, e-mail por ambiente, padrão de commits.
