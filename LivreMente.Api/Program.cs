@@ -57,6 +57,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IPublicationService, PublicationService>();
+
 // Provedor de e-mail selecionado por configuração: "Smtp" (real) ou "Logging" (dev, padrão).
 if (string.Equals(builder.Configuration["Email:Provider"], "Smtp", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
@@ -117,6 +119,7 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapGenreEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapPublicationEndpoints();
 
 app.Run();
 
