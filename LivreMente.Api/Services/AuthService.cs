@@ -204,7 +204,7 @@ public class AuthService(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha ao enviar e-mail de confirmação para {Email}.", email);
+            _logger.LogError(ex, "Falha ao enviar e-mail de confirmação.");
         }
     }
 
