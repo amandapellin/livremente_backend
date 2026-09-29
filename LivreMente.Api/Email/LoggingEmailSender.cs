@@ -2,8 +2,8 @@ namespace LivreMente.Api.Email;
 
 /// <summary>
 /// Implementação de desenvolvimento de <see cref="IEmailSender"/>: não envia
-/// e-mail de verdade — registra o conteúdo (incluindo o link de confirmação) no
-/// log, permitindo testar o fluxo sem um provedor SMTP.
+/// e-mail de verdade — registra apenas metadados seguros no log para permitir
+/// testar o fluxo sem um provedor SMTP.
 /// </summary>
 public class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSender
 {
@@ -11,7 +11,11 @@ public class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSend
 
     public Task SendAsync(string to, string subject, string htmlBody, CancellationToken ct = default)
     {
-        _logger.LogInformation("[E-mail DEV] Para: {To} | Assunto: {Subject}\n{Body}", to, subject, htmlBody);
+        var safeSubject = (subject ?? string.Empty).Replace("\r", string.Empty).Replace("\n", string.Empty);
+        _logger.LogInformation(
+            "[E-mail DEV] E-mail capturado em ambiente de desenvolvimento. Assunto: {Subject}",
+            safeSubject
+        );
         return Task.CompletedTask;
     }
 }
