@@ -1,14 +1,9 @@
 namespace LivreMente.Api.Validation;
 
-/// <summary>
-/// Validação do avatar: aceita apenas PNG ou JPEG, detectados pelos *magic bytes*
-/// (o content-type informado pelo cliente é ignorado por ser falsificável).
-/// </summary>
 public static class AvatarValidation
 {
     public const long MaxBytes = 2 * 1024 * 1024; // 2 MB
 
-    /// <summary>Content-type canônico se o conteúdo for PNG/JPEG; senão, null.</summary>
     public static string? DetectImageType(byte[] content)
     {
         if (IsPng(content)) return "image/png";

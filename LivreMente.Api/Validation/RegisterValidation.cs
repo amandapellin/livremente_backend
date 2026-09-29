@@ -6,10 +6,6 @@ using LivreMente.Api.Models.Enums;
 
 namespace LivreMente.Api.Validation;
 
-/// <summary>
-/// Validação leve do cadastro, espelhando o Zod do front. Retorna a primeira
-/// mensagem de erro encontrada, ou null se o payload é válido.
-/// </summary>
 public static class RegisterValidation
 {
     private static readonly string[] AllowedLanguages = ["pt", "en", "es", "fr", "ru"];

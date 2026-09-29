@@ -37,8 +37,7 @@ public static class PreferenceValidation
             var allowed = PreferenceCatalog.ArticleArchives.Keys.ToHashSet(StringComparer.Ordinal);
             var (err, slugs) = Clean(PreferenceType.knowledge_area, req.KnowledgeAreas, allowed, toLower: false);
             if (err is not null) return (err, null);
-            // Traduz os slugs de área do front para os archives do arXiv — consistente
-            // com o cadastro (#5), que também grava archives (ex.: physics → astro-ph…).
+
             var archives = slugs
                 .SelectMany(slug => PreferenceCatalog.ArticleArchives[slug])
                 .Distinct(StringComparer.Ordinal)

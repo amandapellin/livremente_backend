@@ -2,7 +2,6 @@ using LivreMente.Api.Dtos;
 
 namespace LivreMente.Api.Validation;
 
-/// <summary>Validação de forma da edição de perfil e da troca de senha.</summary>
 public static class ProfileValidation
 {
     public static string? ValidateUpdate(UpdateProfileRequest req)
