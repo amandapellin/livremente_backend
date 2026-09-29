@@ -95,6 +95,28 @@ public static class UserEndpoints
                 : Results.File(avatar.Value.Content, avatar.Value.ContentType);
         }).AllowAnonymous();
 
+        group.MapGet("/me/preferences", async (ClaimsPrincipal principal, IPreferenceService preferences, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            return Results.Ok(await preferences.GetPreferencesAsync(userId.Value, ct));
+        });
+
+        group.MapPut("/me/preferences", async (UpdatePreferencesRequest req, ClaimsPrincipal principal, IPreferenceService preferences, CancellationToken ct) =>
+        {
+            var (error, prefs) = PreferenceValidation.Validate(req);
+            if (error is not null)
+                return Results.BadRequest(new ErrorResponse(error, "VALIDATION_ERROR"));
+
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            return Results.Ok(await preferences.ReplacePreferencesAsync(userId.Value, prefs!, ct));
+        });     
+
         return group;
     }
 
