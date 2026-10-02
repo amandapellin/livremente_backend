@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using LivreMente.Api.Dtos;
+using LivreMente.Api.Security;
 using LivreMente.Api.Services;
 using LivreMente.Api.Validation;
 
@@ -67,6 +69,25 @@ public static class AuthEndpoints
                     new ErrorResponse("Sessão inválida. Faça login novamente.", "INVALID_REFRESH_TOKEN"),
                     statusCode: StatusCodes.Status401Unauthorized);
         });
+
+        group.MapPost("/logout", async (
+            LogoutRequest req, ClaimsPrincipal principal, IAuthService auth, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(req.RefreshToken))
+                return Results.BadRequest(
+                    new ErrorResponse("Informe o refresh token.", "VALIDATION_ERROR"));
+
+            await auth.LogoutAsync(userId.Value, req, ct);
+            return Results.NoContent();
+        })
+        .RequireAuthorization()
+        .Produces(StatusCodes.Status204NoContent)
+        .Produces<ErrorResponse>(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status401Unauthorized);
 
         return group;
     }

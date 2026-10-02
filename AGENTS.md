@@ -150,6 +150,21 @@ corresponder aos `value` das opções do front.**
 
 **Implementado / aguardando revisão e merge:**
 
+- **#29 (RF29) Logout:** `POST /api/auth/logout` exige JWT e recebe
+  `{ refreshToken }`. Revoga somente o token informado pertencente ao usuário
+  autenticado, preenchendo `refresh_token.revoked_at`; o refresh subsequente
+  com esse token retorna 401 `INVALID_REFRESH_TOKEN`. Retorna 204 inclusive
+  para token inexistente, de outro usuário ou já revogado (sem alterar outras
+  sessões); token vazio retorna 400 `VALIDATION_ERROR`. Sem alteração de esquema.
+  O JWT de acesso permanece válido até expirar; o front deve apagar ambos os
+  tokens e enviar o refresh mais recente, sem renovação simultânea ao logout.
+  A condição de corrida preexistente entre refresh e logout não foi resolvida.
+  Contrato exposto pelo Swagger com respostas 204/400/401.
+  Build Release da API aprovado (avisos NU1900 de acesso ao NuGet e CS8604
+  preexistente no SMTP); `git diff --check` aprovado.
+  Pendentes: testes HTTP com banco e regeneração do cliente do front
+  (repositório do front indisponível neste workspace).
+
 - **#18 (RF11) Busca por palavra-chave:** implementado
   `GET /api/publications/search?query=...&page=1&pageSize=20`.
   Pesquisa título e autores, ignorando maiúsculas/minúsculas e
