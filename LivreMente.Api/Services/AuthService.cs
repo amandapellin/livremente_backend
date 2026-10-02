@@ -160,6 +160,21 @@ public class AuthService(
         return new RefreshResult(RefreshError.None, new RefreshResponse(accessToken, plain));
     }
 
+    public async Task LogoutAsync(int userId, LogoutRequest request, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.RefreshToken);
+
+        var hash = OpaqueTokens.Hash(request.RefreshToken);
+        var stored = await _db.RefreshTokens.FirstOrDefaultAsync(
+            t => t.TokenHash == hash && t.UserId == userId, ct);
+
+        if (stored is null || stored.RevokedAt is not null)
+            return;
+
+        stored.RevokedAt = Now();
+        await _db.SaveChangesAsync(ct);
+    }
+
     /// <summary>Cria e anexa um refresh token ao usuário; retorna o valor em claro.</summary>
     private string IssueRefreshToken(User user, bool rememberMe)
     {
