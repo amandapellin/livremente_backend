@@ -32,6 +32,8 @@ public partial class User
 
     public DateTime? LgpdConsentedAt { get; set; }
 
+    public bool MarketingConsent { get; set; }
+
     public virtual ICollection<Annotation> Annotations { get; set; } = [];
 
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = [];

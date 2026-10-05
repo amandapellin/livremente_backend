@@ -40,6 +40,39 @@ public static class UserEndpoints
             return profile is null ? Results.NotFound() : Results.Ok(profile);
         });
 
+        // Exclusão de conta (LGPD, direito à eliminação). Irreversível: apaga o
+        // usuário e todos os dados vinculados.
+        group.MapDelete("/me", async (ClaimsPrincipal principal, IUserService users, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var deleted = await users.DeleteAccountAsync(userId.Value, ct);
+            return deleted ? Results.NoContent() : Results.NotFound();
+        });
+
+        // Consentimento (LGPD): lê o estado e altera o opcional (marketing).
+        group.MapGet("/me/consent", async (ClaimsPrincipal principal, IUserService users, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var consent = await users.GetConsentAsync(userId.Value, ct);
+            return consent is null ? Results.NotFound() : Results.Ok(consent);
+        });
+
+        group.MapPut("/me/consent", async (UpdateConsentRequest req, ClaimsPrincipal principal, IUserService users, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var consent = await users.UpdateMarketingConsentAsync(userId.Value, req.MarketingConsent, ct);
+            return consent is null ? Results.NotFound() : Results.Ok(consent);
+        });
+
         group.MapPatch("/me/password", async (ChangePasswordRequest req, ClaimsPrincipal principal, IUserService users, CancellationToken ct) =>
         {
             var validationError = ProfileValidation.ValidatePasswordChange(req);

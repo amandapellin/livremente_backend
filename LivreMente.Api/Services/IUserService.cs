@@ -26,4 +26,13 @@ public interface IUserService
     Task<AvatarError> SetAvatarAsync(int userId, byte[] content, string contentType, CancellationToken ct = default);
 
     Task<(byte[] Content, string ContentType)?> GetAvatarAsync(int userId, CancellationToken ct = default);
+
+    // Consentimento (LGPD) e exclusão de conta.
+
+    Task<UserConsentDto?> GetConsentAsync(int userId, CancellationToken ct = default);
+
+    Task<UserConsentDto?> UpdateMarketingConsentAsync(int userId, bool marketingConsent, CancellationToken ct = default);
+
+    /// <summary>Exclui a conta e todos os dados do usuário (LGPD). Retorna false se o usuário não existe.</summary>
+    Task<bool> DeleteAccountAsync(int userId, CancellationToken ct = default);
 }

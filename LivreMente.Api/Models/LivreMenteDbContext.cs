@@ -317,6 +317,9 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.LgpdConsentedAt)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("lgpd_consented_at");
+            entity.Property(e => e.MarketingConsent)
+                .HasDefaultValue(false)
+                .HasColumnName("marketing_consent");
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(70)
                 .HasColumnName("password_hash");
