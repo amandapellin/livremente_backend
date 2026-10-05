@@ -52,6 +52,7 @@ public class AuthService(
             BirthDate = DateOnly.Parse(request.BirthDate!, CultureInfo.InvariantCulture),
             Gender = Enum.Parse<Gender>(request.Gender!),
             LgpdConsentedAt = Now(),
+            MarketingConsent = request.MarketingConsent,
         };
 
         await ApplyPreferencesAsync(user, request.Preferences, ct);

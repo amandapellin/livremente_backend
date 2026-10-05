@@ -88,6 +88,57 @@ public class UserService(LivreMenteDbContext db, IPasswordHasher passwordHasher)
         return avatar is null ? null : (avatar.Content, avatar.ContentType);
     }
 
+    public async Task<UserConsentDto?> GetConsentAsync(int userId, CancellationToken ct = default)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        return user is null ? null : ToConsent(user);
+    }
+
+    public async Task<UserConsentDto?> UpdateMarketingConsentAsync(int userId, bool marketingConsent, CancellationToken ct = default)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null)
+            return null;
+
+        user.MarketingConsent = marketingConsent;
+        user.UpdateDate = Now();
+        await _db.SaveChangesAsync(ct);
+        return ToConsent(user);
+    }
+
+    public async Task<bool> DeleteAccountAsync(int userId, CancellationToken ct = default)
+    {
+        if (!await _db.Users.AnyAsync(u => u.Id == userId, ct))
+            return false;
+
+        // LGPD (direito à eliminação): remove todos os dados do usuário. As tabelas
+        // filhas só referenciam users/publication (sem FK entre si), então a ordem
+        // entre elas é indiferente — basta apagá-las antes de users. Tudo numa
+        // transação para ser atômico. user_genre é tabela de junção (sem entidade):
+        // apagada por SQL; as demais via ExecuteDelete (set-based, sem carregar).
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM user_genre WHERE user_id = {userId}", ct);
+        await _db.UserPreferences.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+        await _db.RefreshTokens.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+        await _db.UserAvatars.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+        await _db.Annotations.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+        await _db.Highlights.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+        await _db.WordLookups.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+        await _db.ReadingSessions.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+        await _db.Shelves.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+
+        await _db.Users.Where(u => u.Id == userId).ExecuteDeleteAsync(ct);
+
+        await tx.CommitAsync(ct);
+        return true;
+    }
+
     private static UserProfileDto ToProfile(User user, bool hasAvatar) =>
         new(user.Id.ToString(), user.FullName, user.Email, hasAvatar ? $"/api/users/{user.Id}/avatar" : null);
+
+    // lgpdConsent é verdadeiro enquanto a conta existir (RN03); consentedAt é a data do aceite.
+    private static UserConsentDto ToConsent(User user) =>
+        new(user.LgpdConsentedAt is not null, user.MarketingConsent, user.LgpdConsentedAt);
 }
