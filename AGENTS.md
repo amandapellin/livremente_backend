@@ -151,6 +151,20 @@ corresponder aos `value` das opções do front.**
 
 **Implementado / aguardando revisão e merge:**
 
+- **#17 (RF10) Listagem do catálogo — primeira etapa, em andamento:**
+  `GET /api/publications` público com `page=1`, `pageSize=10` (limite 50),
+  validação 400 `VALIDATION_ERROR` e resposta `CatalogPage` com cards,
+  `totalPages` e `counts { all, book, scientific_article }` antes da paginação.
+  Cards com ID string, gêneros/áreas traduzidos para slugs do `PreferenceCatalog`
+  e capa nula para artigos. Ordem inicial por popularidade, nulos por último,
+  desempate por ID. Página fora do total retorna 200 com lista vazia.
+  Sem alteração de esquema; `/search` preservado.
+  Build Release aprovado (aviso CS8604 preexistente no SMTP). Testes HTTP contra
+  PostgreSQL: GET público 200 com 10 cards, contagens/totalPages e IDs string
+  conferidos; pageSize=51 retorna 400; page=2147483647 retorna 200 com lista vazia.
+  Pendentes para concluir: `q` opcional com busca compartilhada, parâmetro `sort`,
+  demais testes de contrato e atualização do contrato/cliente do front.
+
 - **(RF-privacidade) Consentimento + exclusão de conta (LGPD):** `GET`/`PUT /api/users/me/consent` e `DELETE /api/users/me` (autenticado, sob `UserEndpoints`; RN04 por construção). `GET` devolve `UserConsentDto { lgpdConsent, marketingConsent, consentedAt }` (`lgpdConsent = lgpd_consented_at IS NOT NULL`, verdadeiro enquanto a conta existir; `consentedAt = lgpd_consented_at`); `PUT { marketingConsent }` altera só o opcional → 200. **Persistência do marketing**: coluna nova `users.marketing_consent` (`boolean NOT NULL DEFAULT false`, aplicada por admin) — o `register` agora grava o `MarketingConsent` que já recebia (fecha o follow-up). `DELETE /me` (direito à eliminação) apaga, numa transação, todas as tabelas filhas (`user_genre` via SQL — join sem entidade — e `user_preference`/`refresh_token`/`user_avatar`/`annotation`/`highlight`/`word_lookup`/`reading_session`/`shelf` via `ExecuteDelete`) e o usuário → 204; inexistente → 404. E2E validado contra o banco de dev. **Follow-up do front:** desligar `USE_PRIVACY_MOCK` e regenerar o cliente orval.
 
 - **#29 (RF29) Logout:** `POST /api/auth/logout` exige JWT e recebe
