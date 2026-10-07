@@ -154,8 +154,18 @@ tecnologias empregadas.*
 | #17 | RF10 — Listagem do catálogo | GET público; `CatalogPage`, cards, contagens por tipo, paginação validada, busca opcional, ordenação estável e tradução de gêneros/áreas para slugs; 24 requisições HTTP aprovadas contra PostgreSQL em 07/10/2026; implementado na branch, aguardando revisão e merge |
 
 Na listagem, `relevance` utiliza popularidade como critério inicial. A rota
-`/api/publications/search` é preservada, compartilhando a busca com o parâmetro
-`q` da rota `/api/publications`. A implementação da #17 preserva espaços e
+`/api/publications/search` é um alias público de `/api/publications`, com o
+mesmo contrato, paginação, validação e ordenação. Aceita `query` como alternativa
+a `q` (que tem precedência). Substitui a resposta antiga pelo `CatalogPage`.
+A implementação da #17 preserva espaços e
 hífens e trata os metacaracteres de `LIKE` como texto literal. Não há mudança
 de esquema. Os filtros pertencem à #19; a integração do front (OpenAPI/orval,
 rota de busca e remoção do mock) permanece como follow-up.
+
+Status conferido no GitHub em 07/10/2026 somente para as issues trabalhadas
+nesta sequência: #13 e #18 fechadas; #17 aberta, aguardando revisão e merge.
+Após a conversão de `/search` em alias, foram comparadas as respostas das duas
+rotas com e sem busca, ordenação/paginação e precedência de `q` sobre `query`;
+também foi confirmado o retorno 400 para `pageSize=51`. Build Release aprovado.
+O script auxiliar Node foi removido; o registro das 24 requisições anteriores
+é histórico. A validação manual pode ser repetida pelo Swagger.

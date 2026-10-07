@@ -162,8 +162,13 @@ corresponder aos `value` das opções do front.**
   desempate por ID. Página fora do total retorna 200 com lista vazia.
   `q` opcional busca título/autor com `unaccent` + `ILIKE`; vazio lista tudo.
   A busca compartilhada com `/search` preserva espaços/hífens e escapa `%`, `_`
-  e `\` como literais. `/search` mantém DTO, paginação e resposta vazia para
-  consulta vazia, mas passa a usar essa correção de busca.
+  e `\` como literais. `/search` é alias público da listagem: mesmo `CatalogPage`,
+  validação, paginação (10 itens, máximo 50) e ordenação. Aceita `q` ou o nome
+  antigo `query` (`q` tem precedência); consulta vazia/ausente lista tudo.
+  O contrato antigo de `/search` foi substituído; consumidores devem se ajustar.
+  `SearchAsync` removido: as duas rotas delegam ao mesmo `ListAsync`.
+  Alias validado contra PostgreSQL: respostas iguais com/sem busca, ordenação
+  e paginação, precedência de `q` sobre `query` e erro 400 para pageSize=51.
   `sort`: `recent` (ano DESC, nulos por último), `title` (título ASC),
   `popularity` e `relevance` (popularidade DESC, nulos por último).
   Ausente/desconhecido usa relevance; todas as ordens desempatam por ID.

@@ -85,56 +85,6 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
         return new CatalogPage(items, page, pageSize, total, totalPages, counts);
     }
 
-    public async Task<PagedResult<PublicationSummaryDto>> SearchAsync(
-        string query,
-        int page = 1,
-        int pageSize = 20,
-        CancellationToken ct = default)
-    {
-        if (page < 1) page = 1;
-        if (pageSize is < 1 or > 100) pageSize = 20;
-
-        var searchText = query.Trim();
-
-        if (string.IsNullOrWhiteSpace(searchText))
-        {
-            return new PagedResult<PublicationSummaryDto>(
-                [], page, pageSize, 0);
-        }
-
-        var publications = ApplySearch(_db.Publications.AsNoTracking(), searchText);
-        
-        var total = await publications.CountAsync(ct);
-
-        long offset = (long)(page - 1) * pageSize;
-
-        if (offset >= total)
-        {
-            return new PagedResult<PublicationSummaryDto>(
-                [], page, pageSize, total);
-        }
-
-        var items = await publications
-            .OrderByDescending(p => p.DownloadCount)
-            .ThenBy(p => p.Id)
-            .Skip((int)offset)
-            .Take(pageSize)
-            .Select(p => new PublicationSummaryDto(
-                p.Id,
-                p.Title,
-                p.Source.ToString(),
-                p.Type.ToString(),
-                p.Language,
-                p.Year,
-                p.CoverUrl,
-                p.Authors.Select(a => a.Name).ToList(),
-                p.Genres.Select(g => g.Name).ToList()))
-            .ToListAsync(ct);
-
-        return new PagedResult<PublicationSummaryDto>(
-            items, page, pageSize, total);
-    }
-
     private static IQueryable<Publication> ApplySearch(IQueryable<Publication> publications, string text)
     {
         // Preserva espaços/hífens e trata metacaracteres de LIKE como texto literal.

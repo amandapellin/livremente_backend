@@ -11,10 +11,4 @@ public interface IPublicationService
         string? sort = null,
         CancellationToken ct = default);
 
-    Task<PagedResult<PublicationSummaryDto>> SearchAsync(
-        string query,
-        int page = 1,
-        int pageSize = 20,
-        CancellationToken ct = default);
-
 }
