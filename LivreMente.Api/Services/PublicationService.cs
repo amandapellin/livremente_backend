@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LivreMente.Api.Services;
 
-//classe reponsavel pela busca no banco 
 public class PublicationService(LivreMenteDbContext db) : IPublicationService
 {
     private readonly LivreMenteDbContext _db = db;
@@ -23,8 +22,10 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
             .ToLookup(entry => entry.Archive, entry => entry.Slug, StringComparer.Ordinal);
 
     public async Task<CatalogPage> ListAsync(
+        string? q = null,
         int page = 1,
         int pageSize = 10,
+        string? sort = null,
         CancellationToken ct = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
@@ -32,6 +33,8 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
         ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, 50);
 
         var publications = _db.Publications.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(q))
+            publications = ApplySearch(publications, q);
         var totals = await publications
             .GroupBy(p => p.Type)
             .Select(group => new { Type = group.Key, Count = group.Count() })
@@ -47,10 +50,15 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
         if (offset >= total)
             return new CatalogPage([], page, pageSize, total, totalPages, counts);
 
-        var rows = await publications
-            .OrderBy(p => p.DownloadCount == null)
-            .ThenByDescending(p => p.DownloadCount)
-            .ThenBy(p => p.Id)
+        // Relevância usa popularidade como ordenação inicial, inclusive para valores desconhecidos.
+        var ordered = sort?.Trim().ToLowerInvariant() switch
+        {
+            "recent" => publications.OrderBy(p => p.Year == null).ThenByDescending(p => p.Year),
+            "title" => publications.OrderBy(p => p.Title),
+            _ => publications.OrderBy(p => p.DownloadCount == null).ThenByDescending(p => p.DownloadCount),
+        };
+
+        var rows = await ordered.ThenBy(p => p.Id)
             .Skip((int)offset)
             .Take(pageSize)
             .Select(p => new
@@ -94,47 +102,7 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
                 [], page, pageSize, 0);
         }
 
-        // Normaliza a consulta para evitar que wildcards do SQL alterem a busca
-        // e para que entradas como "quixote", "quixote%", "don quixote"
-        // e "donquixote" sejam tratadas como a mesma busca por texto.
-        var normalizedText = searchText
-            .Trim()
-            .ToLowerInvariant()
-            .Normalize(System.Text.NormalizationForm.FormD);
-
-        normalizedText = new string(
-            normalizedText
-                .Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
-                .ToArray())
-            .Replace("\\", string.Empty)
-            .Replace("%", string.Empty)
-            .Replace("_", string.Empty)
-            .Replace("$", string.Empty)
-            .Replace(" ", string.Empty)
-            .Replace("-", string.Empty)
-            .Replace("_", string.Empty)
-            .Trim();
-
-        if (string.IsNullOrWhiteSpace(normalizedText))
-        {
-            return new PagedResult<PublicationSummaryDto>(
-                [], page, pageSize, 0);
-        }
-
-        var pattern = $"%{normalizedText}%";
-
-        var publications = _db.Publications
-            .Where(p =>
-                EF.Functions.ILike(
-                    EF.Functions.Unaccent(p.Title),
-                    EF.Functions.Unaccent(pattern),
-                    "\\")
-                ||
-                p.Authors.Any(a =>
-                    EF.Functions.ILike(
-                        EF.Functions.Unaccent(a.Name),
-                        EF.Functions.Unaccent(pattern),
-                        "\\")));
+        var publications = ApplySearch(_db.Publications.AsNoTracking(), searchText);
         
         var total = await publications.CountAsync(ct);
 
@@ -165,5 +133,16 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
 
         return new PagedResult<PublicationSummaryDto>(
             items, page, pageSize, total);
+    }
+
+    private static IQueryable<Publication> ApplySearch(IQueryable<Publication> publications, string text)
+    {
+        // Preserva espaços/hífens e trata metacaracteres de LIKE como texto literal.
+        var escaped = text.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+        var pattern = $"%{escaped}%";
+        return publications.Where(p =>
+            EF.Functions.ILike(EF.Functions.Unaccent(p.Title), EF.Functions.Unaccent(pattern), "\\")
+            || p.Authors.Any(a =>
+                EF.Functions.ILike(EF.Functions.Unaccent(a.Name), EF.Functions.Unaccent(pattern), "\\")));
     }
 }

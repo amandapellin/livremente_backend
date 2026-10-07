@@ -15,14 +15,16 @@ public static class PublicationEndpoints
         group.MapGet("", async (
             IPublicationService publications,
             CancellationToken ct,
+            string? q = null,
             int page = 1,
-            int pageSize = 10) =>
+            int pageSize = 10,
+            string? sort = null) =>
         {
             var error = CatalogValidation.Validate(page, pageSize);
             if (error is not null)
                 return Results.BadRequest(new ErrorResponse(error, "VALIDATION_ERROR"));
 
-            return Results.Ok(await publications.ListAsync(page, pageSize, ct));
+            return Results.Ok(await publications.ListAsync(q, page, pageSize, sort, ct));
         })
         .AllowAnonymous()
         .Produces<CatalogPage>(StatusCodes.Status200OK)

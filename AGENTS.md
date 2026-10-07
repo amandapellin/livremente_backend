@@ -151,19 +151,32 @@ corresponder aos `value` das opções do front.**
 
 **Implementado / aguardando revisão e merge:**
 
-- **#17 (RF10) Listagem do catálogo — primeira etapa, em andamento:**
+- **#17 (RF10) Listagem do catálogo — implementada, aguardando revisão:**
   `GET /api/publications` público com `page=1`, `pageSize=10` (limite 50),
   validação 400 `VALIDATION_ERROR` e resposta `CatalogPage` com cards,
   `totalPages` e `counts { all, book, scientific_article }` antes da paginação.
   Cards com ID string, gêneros/áreas traduzidos para slugs do `PreferenceCatalog`
   e capa nula para artigos. Ordem inicial por popularidade, nulos por último,
   desempate por ID. Página fora do total retorna 200 com lista vazia.
-  Sem alteração de esquema; `/search` preservado.
+  `q` opcional busca título/autor com `unaccent` + `ILIKE`; vazio lista tudo.
+  A busca compartilhada com `/search` preserva espaços/hífens e escapa `%`, `_`
+  e `\` como literais. `/search` mantém DTO, paginação e resposta vazia para
+  consulta vazia, mas passa a usar essa correção de busca.
+  `sort`: `recent` (ano DESC, nulos por último), `title` (título ASC),
+  `popularity` e `relevance` (popularidade DESC, nulos por último).
+  Ausente/desconhecido usa relevance; todas as ordens desempatam por ID.
+  `counts` calculado após `q` e antes da paginação; filtros ficam na #19.
+  Sem alteração de esquema.
   Build Release aprovado (aviso CS8604 preexistente no SMTP). Testes HTTP contra
   PostgreSQL: GET público 200 com 10 cards, contagens/totalPages e IDs string
   conferidos; pageSize=51 retorna 400; page=2147483647 retorna 200 com lista vazia.
-  Pendentes para concluir: `q` opcional com busca compartilhada, parâmetro `sort`,
-  demais testes de contrato e atualização do contrato/cliente do front.
+  Teste HTTP reutilizável: `node tests/catalog.http.mjs http://localhost:5092`
+  (Node 18+, API em execução com catálogo importado; somente leitura).
+  Verifica busca por título/autor, caixa/acentos, caracteres literais, paginação,
+  contagens, cards de artigos, ordenações, rota legada e contrato Swagger.
+  Follow-up do front pendente (repo indisponível neste workspace): repontar
+  `useCatalogSearch` para `/api/publications`, regenerar OpenAPI/orval e desligar
+  `USE_CATALOG_MOCK`. O Swagger da API já expõe o novo contrato.
 
 - **(RF-privacidade) Consentimento + exclusão de conta (LGPD):** `GET`/`PUT /api/users/me/consent` e `DELETE /api/users/me` (autenticado, sob `UserEndpoints`; RN04 por construção). `GET` devolve `UserConsentDto { lgpdConsent, marketingConsent, consentedAt }` (`lgpdConsent = lgpd_consented_at IS NOT NULL`, verdadeiro enquanto a conta existir; `consentedAt = lgpd_consented_at`); `PUT { marketingConsent }` altera só o opcional → 200. **Persistência do marketing**: coluna nova `users.marketing_consent` (`boolean NOT NULL DEFAULT false`, aplicada por admin) — o `register` agora grava o `MarketingConsent` que já recebia (fecha o follow-up). `DELETE /me` (direito à eliminação) apaga, numa transação, todas as tabelas filhas (`user_genre` via SQL — join sem entidade — e `user_preference`/`refresh_token`/`user_avatar`/`annotation`/`highlight`/`word_lookup`/`reading_session`/`shelf` via `ExecuteDelete`) e o usuário → 204; inexistente → 404. E2E validado contra o banco de dev. **Follow-up do front:** desligar `USE_PRIVACY_MOCK` e regenerar o cliente orval.
 
