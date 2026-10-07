@@ -151,9 +151,46 @@ corresponder aos `value` das opções do front.**
 
 **Implementado / aguardando revisão e merge:**
 
+- **#17 (RF10) Listagem do catálogo — implementada, aguardando revisão:**
+  Issue aberta no GitHub em 07/10/2026; commits `e1923b0` e `899012d`
+  publicados na branch `feature10/endpoint-de-listagem-do-catalogo`, sem merge.
+  `GET /api/publications` público com `page=1`, `pageSize=10` (limite 50),
+  validação 400 `VALIDATION_ERROR` e resposta `CatalogPage` com cards,
+  `totalPages` e `counts { all, book, scientific_article }` antes da paginação.
+  Cards com ID string, gêneros/áreas traduzidos para slugs do `PreferenceCatalog`
+  e capa nula para artigos. Ordem inicial por popularidade, nulos por último,
+  desempate por ID. Página fora do total retorna 200 com lista vazia.
+  `q` opcional busca título/autor com `unaccent` + `ILIKE`; vazio lista tudo.
+  A busca compartilhada com `/search` preserva espaços/hífens e escapa `%`, `_`
+  e `\` como literais. `/search` é alias público da listagem: mesmo `CatalogPage`,
+  validação, paginação (10 itens, máximo 50) e ordenação. Aceita `q` ou o nome
+  antigo `query` (`q` tem precedência); consulta vazia/ausente lista tudo.
+  O contrato antigo de `/search` foi substituído; consumidores devem se ajustar.
+  `SearchAsync` removido: as duas rotas delegam ao mesmo `ListAsync`.
+  Alias validado contra PostgreSQL: respostas iguais com/sem busca, ordenação
+  e paginação, precedência de `q` sobre `query` e erro 400 para pageSize=51.
+  `sort`: `recent` (ano DESC, nulos por último), `title` (título ASC),
+  `popularity` e `relevance` (popularidade DESC, nulos por último).
+  Ausente/desconhecido usa relevance; todas as ordens desempatam por ID.
+  `counts` calculado após `q` e antes da paginação; filtros ficam na #19.
+  Sem alteração de esquema.
+  Build Release aprovado (aviso CS8604 preexistente no SMTP). Testes HTTP contra
+  PostgreSQL: GET público 200 com 10 cards, contagens/totalPages e IDs string
+  conferidos; pageSize=51 retorna 400; page=2147483647 retorna 200 com lista vazia.
+  Validação HTTP realizada em 07/10/2026: 24 requisições aprovadas contra
+  PostgreSQL de dev, cobrindo busca por título/autor, caixa/acentos, caracteres
+  literais, paginação, contagens, cards de artigos, ordenações, rota legada e
+  contrato Swagger. O script auxiliar em Node foi removido; testes manuais
+  podem ser repetidos pelo Swagger, sem dependência de Node no back-end.
+  Follow-up do front pendente (repo indisponível neste workspace): repontar
+  `useCatalogSearch` para `/api/publications`, regenerar OpenAPI/orval e desligar
+  `USE_CATALOG_MOCK`. O Swagger da API já expõe o novo contrato.
+
 - **(RF-privacidade) Consentimento + exclusão de conta (LGPD):** `GET`/`PUT /api/users/me/consent` e `DELETE /api/users/me` (autenticado, sob `UserEndpoints`; RN04 por construção). `GET` devolve `UserConsentDto { lgpdConsent, marketingConsent, consentedAt }` (`lgpdConsent = lgpd_consented_at IS NOT NULL`, verdadeiro enquanto a conta existir; `consentedAt = lgpd_consented_at`); `PUT { marketingConsent }` altera só o opcional → 200. **Persistência do marketing**: coluna nova `users.marketing_consent` (`boolean NOT NULL DEFAULT false`, aplicada por admin) — o `register` agora grava o `MarketingConsent` que já recebia (fecha o follow-up). `DELETE /me` (direito à eliminação) apaga, numa transação, todas as tabelas filhas (`user_genre` via SQL — join sem entidade — e `user_preference`/`refresh_token`/`user_avatar`/`annotation`/`highlight`/`word_lookup`/`reading_session`/`shelf` via `ExecuteDelete`) e o usuário → 204; inexistente → 404. E2E validado contra o banco de dev. **Follow-up do front:** desligar `USE_PRIVACY_MOCK` e regenerar o cliente orval.
 
-- **#29 (RF29) Logout:** `POST /api/auth/logout` exige JWT e recebe
+**Concluído — autenticação e busca (status remoto conferido em 07/10/2026):**
+
+- **#13 (RF29) Logout — fechada, merge no PR #58:** `POST /api/auth/logout` exige JWT e recebe
   `{ refreshToken }`. Revoga somente o token informado pertencente ao usuário
   autenticado, preenchendo `refresh_token.revoked_at`; o refresh subsequente
   com esse token retorna 401 `INVALID_REFRESH_TOKEN`. Retorna 204 inclusive
@@ -165,10 +202,12 @@ corresponder aos `value` das opções do front.**
   Contrato exposto pelo Swagger com respostas 204/400/401.
   Build Release da API aprovado (avisos NU1900 de acesso ao NuGet e CS8604
   preexistente no SMTP); `git diff --check` aprovado.
-  Pendentes: testes HTTP com banco e regeneração do cliente do front
+  Testes HTTP com banco em 02/10/2026: logout autenticado 204; refresh após
+  logout 401 `INVALID_REFRESH_TOKEN`; logout sem JWT 401.
+  Pendente: regeneração do cliente do front
   (repositório do front indisponível neste workspace).
 
-- **#18 (RF11) Busca por palavra-chave:** implementado
+- **#18 (RF11) Busca por palavra-chave — fechada, merge no PR #52:** implementado
   `GET /api/publications/search?query=...&page=1&pageSize=20`.
   Pesquisa título e autores, ignorando maiúsculas/minúsculas e
   acentuação com `ILIKE` e `unaccent`. Reutiliza
@@ -176,10 +215,10 @@ corresponder aos `value` das opções do front.**
   de caracteres especiais. Script em
   `docs/sql/issue_18_enable_unaccent.sql` (executar como admin;
   requer UNACCENT permitido em azure.extensions no Azure).
-  Testes HTTP manuais realizados antes da integração de develop;
-  build Release aprovado após a integração.
-  Pendentes: atualização do OpenAPI/cliente do front e repetição
-  dos testes HTTP após reiniciar a API com o código integrado.
+  Rota legada retestada contra PostgreSQL em 07/10/2026, junto à #17;
+  build Release aprovado. A #17 compartilha a busca com `q` na rota canônica
+  e corrige a preservação de espaços e caracteres literais (aguarda merge).
+  Pendente: atualização do OpenAPI/cliente do front.
 
 ## 10. Documentos relacionados
 

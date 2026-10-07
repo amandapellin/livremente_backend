@@ -149,3 +149,23 @@ tecnologias empregadas.*
 | #7 | RN03 — Consentimento LGPD | Aceite obrigatório validado no cadastro (erro 400 sem consentimento); registro de data/hora em `users.lgpd_consented_at` |
 | #8 / #9 | RF02 — Login com JWT (+ refresh) | Autenticação por **JWT** (HS256, `Microsoft.AspNetCore.Authentication.JwtBearer`, `IJwtTokenService` — *Strategy*); senha conferida por *hash*; **refresh token** persistido (só o *hash*) com rotação; 401 genérico (anti-enumeração); gate 403 para conta não confirmada |
 | #10 | RF03 — Edição de perfil | Endpoints autenticados (`[Authorize]`) sob `/api/users/me`; identidade do usuário lida do *claim* `sub` do JWT (RN04 por construção, sem IDOR); edição do nome e troca de senha (verifica a senha atual antes de regravar o *hash*); **avatar** enviado por *multipart*, validado por *magic bytes* (PNG/JPG, ≤ 2 MB) e armazenado como `bytea` no banco, servido por endpoint público |
+| #13 | RF29 — Logout | Revogação do refresh token pelo hash e proprietário; JWT obrigatório; testes HTTP 204/401; integrado em `develop` pelo PR #58 |
+| #18 | RF11 — Busca por palavra-chave | EF Core/Npgsql com `unaccent` + `ILIKE` em título/autor; paginação e DTO; integrado pelo PR #52 |
+| #17 | RF10 — Listagem do catálogo | GET público; `CatalogPage`, cards, contagens por tipo, paginação validada, busca opcional, ordenação estável e tradução de gêneros/áreas para slugs; 24 requisições HTTP aprovadas contra PostgreSQL em 07/10/2026; implementado na branch, aguardando revisão e merge |
+
+Na listagem, `relevance` utiliza popularidade como critério inicial. A rota
+`/api/publications/search` é um alias público de `/api/publications`, com o
+mesmo contrato, paginação, validação e ordenação. Aceita `query` como alternativa
+a `q` (que tem precedência). Substitui a resposta antiga pelo `CatalogPage`.
+A implementação da #17 preserva espaços e
+hífens e trata os metacaracteres de `LIKE` como texto literal. Não há mudança
+de esquema. Os filtros pertencem à #19; a integração do front (OpenAPI/orval,
+rota de busca e remoção do mock) permanece como follow-up.
+
+Status conferido no GitHub em 07/10/2026 somente para as issues trabalhadas
+nesta sequência: #13 e #18 fechadas; #17 aberta, aguardando revisão e merge.
+Após a conversão de `/search` em alias, foram comparadas as respostas das duas
+rotas com e sem busca, ordenação/paginação e precedência de `q` sobre `query`;
+também foi confirmado o retorno 400 para `pageSize=51`. Build Release aprovado.
+O script auxiliar Node foi removido; o registro das 24 requisições anteriores
+é histórico. A validação manual pode ser repetida pelo Swagger.

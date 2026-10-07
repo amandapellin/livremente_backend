@@ -4,10 +4,11 @@ namespace LivreMente.Api.Services;
 
 public interface IPublicationService
 {
-    Task<PagedResult<PublicationSummaryDto>> SearchAsync(
-        string query,
+    Task<CatalogPage> ListAsync(
+        string? q = null,
         int page = 1,
-        int pageSize = 20,
+        int pageSize = 10,
+        string? sort = null,
         CancellationToken ct = default);
 
 }
