@@ -5,7 +5,10 @@ using LivreMente.Api.Models.Enums;
 namespace LivreMente.Api.Validation;
 
 public sealed record NormalizedPreferences(
-    IReadOnlyDictionary<PreferenceType, IReadOnlyList<string>> ByType);
+    IReadOnlyDictionary<PreferenceType, IReadOnlyList<string>> ByType,
+    string? Theme,
+    bool? ResumeAuto,
+    bool? SaveDictionary);
 
 public static class PreferenceValidation
 {
@@ -13,6 +16,8 @@ public static class PreferenceValidation
         new(StringComparer.Ordinal) { "book", "scientific_article" };
     private static readonly HashSet<string> Languages =
         new(StringComparer.Ordinal) { "pt", "en", "es", "fr", "ru" };
+    private static readonly HashSet<string> Themes =
+        new(StringComparer.Ordinal) { "light", "sepia", "dark" };
 
     public static (string? Error, NormalizedPreferences? Prefs) Validate(UpdatePreferencesRequest req)
     {
@@ -45,10 +50,21 @@ public static class PreferenceValidation
             byType[PreferenceType.knowledge_area] = archives;
         }
 
-        if (byType.Count == 0)
-            return ("Envie ao menos um dos campos: languages, contentTypes ou knowledgeAreas.", null);
+        // Campos do leitor (RF26): escalares, merge parcial. null = não enviado.
+        string? theme = null;
+        if (req.Theme is not null)
+        {
+            theme = req.Theme.Trim().ToLowerInvariant();
+            if (!Themes.Contains(theme))
+                return ($"Tema inválido: '{req.Theme}'. Use light, sepia ou dark.", null);
+        }
 
-        return (null, new NormalizedPreferences(byType));
+        var nothingSent = byType.Count == 0
+            && req.Theme is null && req.ResumeAuto is null && req.SaveDictionary is null;
+        if (nothingSent)
+            return ("Envie ao menos um campo: languages, contentTypes, knowledgeAreas, theme, resumeAuto ou saveDictionary.", null);
+
+        return (null, new NormalizedPreferences(byType, theme, req.ResumeAuto, req.SaveDictionary));
     }
 
     private static (string? Error, IReadOnlyList<string> Values) Clean(

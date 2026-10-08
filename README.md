@@ -72,6 +72,18 @@ dotnet run
 
 A API sobe, por padrão, em `https://localhost:<porta>` (a porta exata aparece no console ao rodar). A documentação interativa (Swagger UI) fica disponível em `/swagger` em ambiente de desenvolvimento.
 
+## Principais endpoints
+
+Visão geral por recurso. O Swagger (`/swagger`) é a referência completa e sempre atual; o **status de implementação por issue** (o que já está mergeado vs. em revisão) fica no `AGENTS.md`, seção "Status por issue".
+
+| Grupo | Endpoints | Observações |
+|---|---|---|
+| **Autenticação** (`/api/auth`) | `POST /register`, `GET /confirm`, `POST /login`, `POST /refresh`, `POST /logout` | Cadastro com preferências em transação; confirmação por e-mail; JWT + *refresh token* rotacionado |
+| **Usuário** (`/api/users/me`, autenticado) | `GET`/`PUT /me`, `PATCH /me/password`, `PUT /me/avatar`, `GET`/`PUT /me/preferences`, `GET`/`PUT /me/genres` + `DELETE /me/genres/{id}`, `GET`/`PUT /me/consent`, `DELETE /me` | Identidade lida do JWT (RN04 por construção); preferências cobrem EAV (idioma/tipo/área), gênero (M:N) e leitor (tema/*toggles*); consentimento e exclusão de conta (LGPD) |
+| **Avatar público** (`/api/users/{id}/avatar`) | `GET` | Serve a imagem (anônimo) |
+| **Gêneros** (`/api/genres`) | `GET /`, `GET /{id}`, `GET /{id}/publications` | Catálogo de gêneros e publicações por gênero |
+| **Publicações/Catálogo** (`/api/publications`) | `GET /` (listagem com busca/paginação/*counts*), `GET /search` (alias) | Busca por título/autor com `unaccent`; filtros e ordenação em evolução |
+
 ## Variáveis/segredos necessários
 
 | Nome | Onde configurar | Descrição |
