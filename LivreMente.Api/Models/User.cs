@@ -34,6 +34,14 @@ public partial class User
 
     public bool MarketingConsent { get; set; }
 
+    public string? ReaderTheme { get; set; }
+
+    // Default true (RF26): o EF envia o valor do bool no INSERT, então o default
+    // precisa estar aqui (o DEFAULT da coluna só valeria se o valor não fosse enviado).
+    public bool ResumeAuto { get; set; } = true;
+
+    public bool SaveDictionary { get; set; } = true;
+
     public virtual ICollection<Annotation> Annotations { get; set; } = [];
 
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = [];

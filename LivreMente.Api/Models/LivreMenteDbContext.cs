@@ -320,6 +320,15 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.MarketingConsent)
                 .HasDefaultValue(false)
                 .HasColumnName("marketing_consent");
+            entity.Property(e => e.ReaderTheme)
+                .HasMaxLength(10)
+                .HasColumnName("reader_theme");
+            entity.Property(e => e.ResumeAuto)
+                .HasDefaultValue(true)
+                .HasColumnName("resume_auto");
+            entity.Property(e => e.SaveDictionary)
+                .HasDefaultValue(true)
+                .HasColumnName("save_dictionary");
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(70)
                 .HasColumnName("password_hash");

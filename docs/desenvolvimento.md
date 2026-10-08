@@ -131,6 +131,29 @@ projeto. Segredos de configuração (como a *string* de conexão e credenciais d
 e-mail) são mantidos fora do versionamento, por meio do mecanismo de **User
 Secrets** em desenvolvimento e de variáveis de ambiente em produção.
 
+### 3.1.10 Modelagem das preferências e proteção de dados (LGPD)
+
+As preferências do usuário foram modeladas conforme a cardinalidade de cada
+dado, evitando uma solução única. Preferências multivaloradas de recomendação
+(idiomas, tipos de conteúdo e áreas de conhecimento) seguem o padrão
+**entidade-atributo-valor (EAV)**, em uma tabela de pares tipo/valor; os gêneros
+literários, por serem um vínculo a registros do acervo, usam uma relação
+**muitos-para-muitos**; e as preferências escalares do leitor (tema e
+*toggles* de interface) são simples **colunas** na tabela de usuário. Um mesmo
+*endpoint* de preferências concentra esses dados e adota **atualização parcial
+(merge)**: cada campo é opcional e só é alterado quando enviado, permitindo que
+diferentes telas (perfil e leitor) gravem no mesmo recurso sem sobrescrever umas
+às outras. Um **dicionário de tradução** converte os termos exibidos ao usuário
+no vocabulário das fontes externas, com tradução reversa na leitura.
+
+No tocante à **proteção de dados pessoais (LGPD)**, o cadastro registra o
+consentimento obrigatório de tratamento (com data e hora) e um consentimento
+**opcional** (avisos), este último revogável a qualquer momento. O sistema
+implementa ainda o **direito à eliminação**: a exclusão de conta remove, em uma
+única transação, o usuário e todos os dados vinculados (preferências, sessões de
+leitura, grifos, anotações, consultas e credenciais), garantindo que nenhum
+resíduo permaneça após a solicitação.
+
 ---
 
 ## Apêndice — Registro de evolução por issue
@@ -152,6 +175,10 @@ tecnologias empregadas.*
 | #13 | RF29 — Logout | Revogação do refresh token pelo hash e proprietário; JWT obrigatório; testes HTTP 204/401; integrado em `develop` pelo PR #58 |
 | #18 | RF11 — Busca por palavra-chave | EF Core/Npgsql com `unaccent` + `ILIKE` em título/autor; paginação e DTO; integrado pelo PR #52 |
 | #17 | RF10 — Listagem do catálogo | GET público; `CatalogPage`, cards, contagens por tipo, paginação validada, busca opcional, ordenação estável e tradução de gêneros/áreas para slugs; 24 requisições HTTP aprovadas contra PostgreSQL em 07/10/2026; implementado na branch, aguardando revisão e merge |
+| #11 | RF04 — Preferências de leitura (EAV) | `GET`/`PUT /api/users/me/preferences` autenticado; modelo **EAV** em `user_preference` (idioma, tipo de conteúdo, área de conhecimento); contrato `{ languages, contentTypes, knowledgeAreas }`; `knowledge_area` gravada traduzida em *archives* (reversão no GET); substituição idempotente por tipo; mergeado (PR #56) |
+| #12 | RF04 — Preferências de gênero (M:N) | `GET`/`PUT /api/users/me/genres` + `DELETE /{genreId}`; relação **M:N** `user_genre`; tradução *slug* ↔ `genre.name` via `PreferenceCatalog` (*fan-out* na escrita, reversão na leitura); substituição por *diff* mínimo; mergeado (PR #57) |
+| — | LGPD — Consentimento e exclusão de conta | `GET`/`PUT /api/users/me/consent` (lê o consentimento; altera o *marketing*, persistido em `users.marketing_consent`); `DELETE /api/users/me` (direito à eliminação) apaga, em transação, todas as tabelas filhas e o usuário; identidade do JWT (RN04); E2E validado contra o banco de dev |
+| RF26 | Preferências do leitor (tema e *toggles*) | Extensão do `/api/users/me/preferences` com `theme` (`light\|sepia\|dark`), `resumeAuto` e `saveDictionary` (colunas em `users`); `PUT` passa a **merge parcial** (campo ausente = não tocado), permitindo perfil (EAV) e leitor gravarem no mesmo recurso sem se sobrescrever; E2E validado contra o banco de dev |
 
 Na listagem, `relevance` utiliza popularidade como critério inicial. A rota
 `/api/publications/search` é um alias público de `/api/publications`, com o

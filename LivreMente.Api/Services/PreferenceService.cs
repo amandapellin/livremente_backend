@@ -34,10 +34,19 @@ public class PreferenceService(LivreMenteDbContext db) : IPreferenceService
                 .Select(kv => kv.Key)
                 .OrderBy(k => k, StringComparer.Ordinal)];
 
+        // Campos escalares do leitor (RF26), colunas em users.
+        var reader = await _db.Users
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.ReaderTheme, u.ResumeAuto, u.SaveDictionary })
+            .FirstOrDefaultAsync(ct);
+
         return new UserPreferencesDto(
             Of(PreferenceType.language),
             Of(PreferenceType.content_type),
-            knowledgeAreaSlugs);
+            knowledgeAreaSlugs,
+            reader?.ReaderTheme,
+            reader?.ResumeAuto ?? true,
+            reader?.SaveDictionary ?? true);
     }
 
     public async Task<UserPreferencesDto> ReplacePreferencesAsync(
@@ -68,6 +77,19 @@ public class PreferenceService(LivreMenteDbContext db) : IPreferenceService
                     PreferenceType = type,
                     PreferenceValue = value,
                 });
+        }
+
+        // Campos do leitor (RF26): aplica só os enviados (merge parcial), sem
+        // tocar nos ausentes nem nas preferências EAV acima.
+        if (prefs.Theme is not null || prefs.ResumeAuto is not null || prefs.SaveDictionary is not null)
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+            if (user is not null)
+            {
+                if (prefs.Theme is not null) user.ReaderTheme = prefs.Theme;
+                if (prefs.ResumeAuto is not null) user.ResumeAuto = prefs.ResumeAuto.Value;
+                if (prefs.SaveDictionary is not null) user.SaveDictionary = prefs.SaveDictionary.Value;
+            }
         }
 
         await _db.SaveChangesAsync(ct);
