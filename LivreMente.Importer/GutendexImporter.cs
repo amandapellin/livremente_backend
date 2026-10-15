@@ -14,7 +14,11 @@ public class GutendexBook
     public List<string> Summaries { get; set; } = [];
     public List<string> Bookshelves { get; set; } = [];
     public List<string> Languages { get; set; } = [];
-    public bool Copyright { get; set; }
+
+    // Tri-estado no Gutendex: true (sob copyright), false (domínio público
+    // confirmado) ou null (indeterminado). Nullable para não quebrar a
+    // desserialização quando vem null (ver RN #16 no filtro de importação).
+    public bool? Copyright { get; set; }
     public Dictionary<string, string> Formats { get; set; } = [];
 
     [JsonPropertyName("download_count")]
@@ -81,7 +85,13 @@ public class GutendexImporter(HttpClient http, LivreMenteDbContext db)
 
             foreach (var book in result.Results)
             {
-                if (book.Copyright) continue; // só domínio público confirmado
+                // RN #16 — Filtro de domínio público: obras ainda sob copyright não
+                // entram no catálogo. O campo `copyright` do Gutendex é tri-estado:
+                //   true  → ainda sob copyright           → ignora
+                //   false → domínio público confirmado    → importa
+                //   null  → indeterminado                 → importa (mantido no catálogo)
+                // Só descartamos o estado explicitamente sob copyright (true).
+                if (book.Copyright == true) continue;
 
                 var externalId = book.Id.ToString();
                 var exists = await _db.Publications
@@ -99,7 +109,7 @@ public class GutendexImporter(HttpClient http, LivreMenteDbContext db)
                     CoverUrl = book.Formats.GetValueOrDefault("image/jpeg"),
                     EpubFileUrl = book.Formats.GetValueOrDefault("application/epub+zip"),
                     DownloadCount = book.DownloadCount,
-                    CopyrightFlag = book.Copyright
+                    CopyrightFlag = book.Copyright ?? false
                 };
 
                 foreach (var a in book.Authors)

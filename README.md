@@ -172,7 +172,7 @@ dotnet run
 
 O importador roda em duas etapas:
 
-- **Gutendex**: importa o catálogo completo (~79 mil livros), ordenado por popularidade (mais baixados primeiro), pulando itens com `copyright: true` (RN de domínio público).
+- **Gutendex**: importa o catálogo completo (~79 mil livros), ordenado por popularidade (mais baixados primeiro). O campo `copyright` do Gutendex é tri-estado e o filtro de domínio público (RN #16) **pula apenas os itens com `copyright: true`** (sob copyright); os `false` (domínio público confirmado) e `null` (indeterminado) são importados.
 - **arXiv**: importa até 150 artigos de cada uma das 20 áreas de conhecimento do arXiv (astro-ph, cond-mat, cs, econ, eess, gr-qc, hep-ex, hep-lat, hep-ph, hep-th, math, math-ph, nlin, nucl-ex, nucl-th, physics, q-bio, q-fin, quant-ph, stat), usando busca por categoria com wildcard — um total de até ~3.000 artigos, representando todas as áreas do arXiv.
 
 Para ajustar quantidade ou áreas, edite os parâmetros em `LivreMente.Importer/Program.cs`.

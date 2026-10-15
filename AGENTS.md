@@ -153,6 +153,8 @@ corresponder aos `value` das opções do front.**
 
 **Implementado / aguardando revisão e merge:**
 
+- **#16 (RN) Filtro de `copyright` na importação do Gutendex:** no `GutendexImporter`, só entram no `publication` obras **não** sob copyright. O campo `copyright` do Gutendex é **tri-estado** — o DTO `GutendexBook.Copyright` virou **`bool?`** (evita `JsonException` quando vem `null`, que abortaria a página inteira). Filtro `if (book.Copyright == true) continue;` → descarta só o estado explicitamente sob copyright; `false` (confirmado) e `null` (indeterminado) **entram** (decisão da autora: manter `null` no catálogo). Regra documentada no código citando a RN #16. `CopyrightFlag = book.Copyright ?? false`. Build aprovado; sem alteração de esquema (coluna `copyright_flag` já existe). Importação real não reexecutada (consome Gutendex/arXiv, demorada).
+
 - **#17 (RF10) Listagem do catálogo — implementada, aguardando revisão:**
   Issue aberta no GitHub em 07/10/2026; commits `e1923b0` e `899012d`
   publicados na branch `feature10/endpoint-de-listagem-do-catalogo`, sem merge.
