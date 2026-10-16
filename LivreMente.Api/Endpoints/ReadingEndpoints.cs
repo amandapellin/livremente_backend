@@ -40,6 +40,18 @@ public static class ReadingEndpoints
             };
         });
 
+        // RF18: retomada de leitura — devolve a última página lida (ou null).
+        group.MapGet("/{publicationId:int}/last-page", async (
+            int publicationId, ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var lastPage = await reading.GetLastPageAsync(userId.Value, publicationId, ct);
+            return Results.Ok(new LastPageReadDto(lastPage));
+        });
+
         // RF15/RF16: proxy dos arquivos de leitura. Público (conteúdo de acesso
         // aberto; a rota /leitura não é autenticada). O servidor busca na fonte
         // externa (sem CORS) e transmite pela mesma origem do front.

@@ -32,6 +32,12 @@ public interface IReadingService
     Task<SaveLastPageResult> SaveLastPageAsync(int userId, int publicationId, int lastPageRead, CancellationToken ct = default);
 
     /// <summary>
+    /// Retomada de leitura (RF18): última página lida do par usuário/publicação,
+    /// ou null se o usuário nunca leu essa publicação.
+    /// </summary>
+    Task<int?> GetLastPageAsync(int userId, int publicationId, CancellationToken ct = default);
+
+    /// <summary>
     /// Baixa, no servidor, o arquivo (EPUB/PDF) da fonte externa e o devolve em
     /// bytes, para o front consumi-lo pela mesma origem (sem CORS). RF15/RF16.
     /// </summary>
