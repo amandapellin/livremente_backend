@@ -16,11 +16,14 @@ public static class PublicationEndpoints
             IPublicationService publications,
             CancellationToken ct,
             string? q = null,
+            string? type = null,
+            string[]? languages = null,
+            string[]? genres = null,
             int page = 1,
             int pageSize = 10,
             string? sort = null) =>
         {
-            return await ListAsync(publications, q, page, pageSize, sort, ct);
+            return await ListAsync(publications, q, type, languages, genres, page, pageSize, sort, ct);
         })
         .AllowAnonymous()
         .Produces<CatalogPage>(StatusCodes.Status200OK)
@@ -31,11 +34,14 @@ public static class PublicationEndpoints
             CancellationToken ct,
             string? query = null,
             string? q = null,
+            string? type = null,
+            string[]? languages = null,
+            string[]? genres = null,
             int page = 1,
             int pageSize = 10,
             string? sort = null) =>
         {
-            return await ListAsync(publications, q ?? query, page, pageSize, sort, ct);
+            return await ListAsync(publications, q ?? query, type, languages, genres, page, pageSize, sort, ct);
         })
         .AllowAnonymous()
         .WithSummary("Alias de GET /api/publications")
@@ -47,13 +53,18 @@ public static class PublicationEndpoints
     }
 
     private static async Task<IResult> ListAsync(
-        IPublicationService publications, string? q, int page, int pageSize,
+        IPublicationService publications, string? q, string? type,
+        string[]? languages, string[]? genres, int page, int pageSize,
         string? sort, CancellationToken ct)
     {
-        var error = CatalogValidation.Validate(page, pageSize);
-        if (error is not null)
-            return Results.BadRequest(new ErrorResponse(error, "VALIDATION_ERROR"));
+        var pageError = CatalogValidation.Validate(page, pageSize);
+        if (pageError is not null)
+            return Results.BadRequest(new ErrorResponse(pageError, "VALIDATION_ERROR"));
 
-        return Results.Ok(await publications.ListAsync(q, page, pageSize, sort, ct));
+        var (filterError, filters) = CatalogFilterValidation.Validate(type, languages, genres);
+        if (filterError is not null)
+            return Results.BadRequest(new ErrorResponse(filterError, "VALIDATION_ERROR"));
+
+        return Results.Ok(await publications.ListAsync(q, filters, page, pageSize, sort, ct));
     }
 }
