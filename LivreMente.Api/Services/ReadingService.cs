@@ -24,6 +24,9 @@ public class ReadingService(
     // concorrentes (StrictMode do dev dispara em dobro; evita 502 por concorrência).
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> FileGates = new();
 
+    /// <summary>UTC como Unspecified — exigido pelas colunas `timestamp without time zone`.</summary>
+    private static DateTime Now() => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
     public async Task<SaveLastPageResult> SaveLastPageAsync(
         int userId, int publicationId, int lastPageRead, CancellationToken ct = default)
     {
@@ -74,6 +77,39 @@ public class ReadingService(
             DO UPDATE SET read_percentage = EXCLUDED.read_percentage", ct);
 
         return SaveLastPageResult.Saved;
+    }
+
+    public async Task<int?> StartSessionAsync(int userId, int publicationId, CancellationToken ct = default)
+    {
+        // RF20: vale para EPUB e PDF — basta a publicação existir.
+        var exists = await _db.Publications.AsNoTracking().AnyAsync(p => p.Id == publicationId, ct);
+        if (!exists)
+            return null;
+
+        var session = new ReadingSession
+        {
+            UserId = userId,
+            PublicationId = publicationId,
+            StartTime = Now(),
+            ActiveSeconds = 0,
+        };
+        _db.ReadingSessions.Add(session);
+        await _db.SaveChangesAsync(ct);
+        return session.Id;
+    }
+
+    public async Task<bool> UpdateSessionAsync(int userId, int sessionId, int activeSeconds, CancellationToken ct = default)
+    {
+        // Só a sessão do próprio usuário (sem revelar as de outros) — RN04.
+        var session = await _db.ReadingSessions
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, ct);
+        if (session is null)
+            return false;
+
+        session.ActiveSeconds = activeSeconds;
+        session.EndTime = Now(); // end_time acompanha o último heartbeat
+        await _db.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<int?> GetLastPageAsync(int userId, int publicationId, CancellationToken ct = default)

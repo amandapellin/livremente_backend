@@ -44,6 +44,19 @@ public interface IReadingService
     Task<SaveLastPageResult> SavePercentageAsync(int userId, int publicationId, int readPercentage, CancellationToken ct = default);
 
     /// <summary>
+    /// Abre uma sessão de leitura (RF20) em `reading_session` (start_time = agora).
+    /// Vale para EPUB e PDF. Retorna o id da sessão, ou null se a publicação não existe.
+    /// </summary>
+    Task<int?> StartSessionAsync(int userId, int publicationId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Atualiza o tempo ativo da sessão (RF20): grava `active_seconds` e move
+    /// `end_time` para agora (heartbeat/encerramento). Só a sessão do próprio
+    /// usuário. Retorna false se a sessão não existe (ou não é dele).
+    /// </summary>
+    Task<bool> UpdateSessionAsync(int userId, int sessionId, int activeSeconds, CancellationToken ct = default);
+
+    /// <summary>
     /// Baixa, no servidor, o arquivo (EPUB/PDF) da fonte externa e o devolve em
     /// bytes, para o front consumi-lo pela mesma origem (sem CORS). RF15/RF16.
     /// </summary>

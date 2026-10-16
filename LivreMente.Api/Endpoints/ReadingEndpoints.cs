@@ -40,6 +40,36 @@ public static class ReadingEndpoints
             };
         });
 
+        // RF20: abre uma sessão de leitura (EPUB e PDF) → id da sessão.
+        group.MapPost("/{publicationId:int}/session", async (
+            int publicationId, ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var sessionId = await reading.StartSessionAsync(userId.Value, publicationId, ct);
+            return sessionId is null
+                ? Results.NotFound()
+                : Results.Ok(new StartSessionResponse(sessionId.Value));
+        });
+
+        // RF20: heartbeat/encerramento — grava o tempo ativo (segundos) da sessão.
+        group.MapPut("/sessions/{sessionId:int}", async (
+            int sessionId, UpdateSessionRequest req, ClaimsPrincipal principal,
+            IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            if (req.ActiveSeconds < 0)
+                return Results.BadRequest(new ErrorResponse("activeSeconds deve ser maior ou igual a 0.", "VALIDATION_ERROR"));
+
+            var ok = await reading.UpdateSessionAsync(userId.Value, sessionId, req.ActiveSeconds, ct);
+            return ok ? Results.NoContent() : Results.NotFound();
+        });
+
         // RF19: atualização do percentual lido (0–100, EPUB).
         group.MapPut("/{publicationId:int}/percentage", async (
             int publicationId, UpdatePercentageRequest req, ClaimsPrincipal principal,

@@ -234,6 +234,9 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.EndTime)
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("end_time");
+            entity.Property(e => e.ActiveSeconds)
+                .HasDefaultValue(0)
+                .HasColumnName("active_seconds");
             entity.Property(e => e.PublicationId).HasColumnName("publication_id");
             entity.Property(e => e.StartTime)
                 .HasColumnType("timestamp without time zone")
