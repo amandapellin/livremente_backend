@@ -264,6 +264,7 @@ public partial class LivreMenteDbContext : DbContext
                 .HasColumnName("id");
             entity.Property(e => e.BookmarkedPage).HasColumnName("bookmarked_page");
             entity.Property(e => e.LastPageRead).HasColumnName("last_page_read");
+            entity.Property(e => e.Status).HasColumnName("status");
             entity.Property(e => e.PublicationId).HasColumnName("publication_id");
             entity.Property(e => e.ReadPercentage).HasColumnName("read_percentage");
             entity.Property(e => e.UserId).HasColumnName("user_id");
