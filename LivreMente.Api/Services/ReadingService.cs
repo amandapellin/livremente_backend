@@ -52,6 +52,30 @@ public class ReadingService(
         return SaveLastPageResult.Saved;
     }
 
+    public async Task<SaveLastPageResult> SavePercentageAsync(
+        int userId, int publicationId, int readPercentage, CancellationToken ct = default)
+    {
+        // RF19: percentual só faz sentido para EPUB (livros do Gutendex).
+        var pub = await _db.Publications.AsNoTracking()
+            .Where(p => p.Id == publicationId)
+            .Select(p => new { p.EpubFileUrl })
+            .FirstOrDefaultAsync(ct);
+
+        if (pub is null)
+            return SaveLastPageResult.PublicationNotFound;
+        if (string.IsNullOrEmpty(pub.EpubFileUrl))
+            return SaveLastPageResult.NotEpub;
+
+        // Upsert atômico (mesma proteção contra corrida do auto-save do #22).
+        await _db.Database.ExecuteSqlInterpolatedAsync($@"
+            INSERT INTO shelf (user_id, publication_id, status, read_percentage)
+            VALUES ({userId}, {publicationId}, 'reading'::reading_status_enum, {readPercentage})
+            ON CONFLICT (user_id, publication_id)
+            DO UPDATE SET read_percentage = EXCLUDED.read_percentage", ct);
+
+        return SaveLastPageResult.Saved;
+    }
+
     public async Task<int?> GetLastPageAsync(int userId, int publicationId, CancellationToken ct = default)
     {
         // Sem linha de estante OU last_page_read nulo → null (nunca leu / não salvo).

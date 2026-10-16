@@ -38,6 +38,12 @@ public interface IReadingService
     Task<int?> GetLastPageAsync(int userId, int publicationId, CancellationToken ct = default);
 
     /// <summary>
+    /// Atualiza o percentual lido (RF19) na estante do usuário. Só EPUB; cria a
+    /// linha de estante (status = reading) se não existir. O 0–100 é validado no endpoint.
+    /// </summary>
+    Task<SaveLastPageResult> SavePercentageAsync(int userId, int publicationId, int readPercentage, CancellationToken ct = default);
+
+    /// <summary>
     /// Baixa, no servidor, o arquivo (EPUB/PDF) da fonte externa e o devolve em
     /// bytes, para o front consumi-lo pela mesma origem (sem CORS). RF15/RF16.
     /// </summary>

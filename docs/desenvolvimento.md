@@ -184,6 +184,7 @@ tecnologias empregadas.*
 | #21 | RF14 — Dados resumidos do card | Coberta pela #17: `PublicationCardDto` (capa/título/ano/autor/gênero/fonte + `id`); capa nula para artigo na projeção do `ListAsync`, sem erro; verificado por E2E (card de livro e de artigo) |
 | #22 | RF17 / RN08 — Última página lida (EPUB) | `PUT /api/reading/{id}/last-page` autenticado; `ReadingService` faz upsert em `shelf` (cria com `status=reading` se ausente, senão atualiza `last_page_read`); só EPUB (`epub_file_url`), senão 422; mapeada a coluna `shelf.status` (drift do scaffolding), sem migração; E2E contra o banco de dev |
 | #23 | RF18 — Retomada de leitura | `GET /api/reading/{id}/last-page` autenticado → `{ lastPageRead: int\|null }`; `GetLastPageAsync` lê `shelf` do par usuário/publicação; null se nunca leu; E2E contra o banco de dev |
+| #24 | RF19 — Percentual lido | `PUT /api/reading/{id}/percentage` autenticado; `SavePercentageAsync` valida EPUB e faz upsert atômico em `shelf.read_percentage`; valor 0–100 (senão 400); não-EPUB 422; E2E contra o banco de dev |
 
 Na listagem, `relevance` utiliza popularidade como critério inicial. A rota
 `/api/publications/search` é um alias público de `/api/publications`, com o
