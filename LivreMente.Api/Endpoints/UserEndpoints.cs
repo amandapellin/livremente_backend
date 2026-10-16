@@ -28,13 +28,13 @@ public static class UserEndpoints
 
         group.MapPut("/me", async (UpdateProfileRequest req, ClaimsPrincipal principal, IUserService users, CancellationToken ct) =>
         {
-            var validationError = ProfileValidation.ValidateUpdate(req);
-            if (validationError is not null)
-                return Results.BadRequest(new ErrorResponse(validationError, "VALIDATION_ERROR"));
-
             var userId = principal.GetUserId();
             if (userId is null)
                 return Results.Unauthorized();
+
+            var validationError = ProfileValidation.ValidateUpdate(req);
+            if (validationError is not null)
+                return Results.BadRequest(new ErrorResponse(validationError, "VALIDATION_ERROR"));
 
             var profile = await users.UpdateProfileAsync(userId.Value, req.Name!, ct);
             return profile is null ? Results.NotFound() : Results.Ok(profile);
@@ -75,13 +75,13 @@ public static class UserEndpoints
 
         group.MapPatch("/me/password", async (ChangePasswordRequest req, ClaimsPrincipal principal, IUserService users, CancellationToken ct) =>
         {
-            var validationError = ProfileValidation.ValidatePasswordChange(req);
-            if (validationError is not null)
-                return Results.BadRequest(new ErrorResponse(validationError, "VALIDATION_ERROR"));
-
             var userId = principal.GetUserId();
             if (userId is null)
                 return Results.Unauthorized();
+
+            var validationError = ProfileValidation.ValidatePasswordChange(req);
+            if (validationError is not null)
+                return Results.BadRequest(new ErrorResponse(validationError, "VALIDATION_ERROR"));
 
             var result = await users.ChangePasswordAsync(userId.Value, req.CurrentPassword!, req.NewPassword!, ct);
             return result switch
@@ -139,13 +139,13 @@ public static class UserEndpoints
 
         group.MapPut("/me/preferences", async (UpdatePreferencesRequest req, ClaimsPrincipal principal, IPreferenceService preferences, CancellationToken ct) =>
         {
-            var (error, prefs) = PreferenceValidation.Validate(req);
-            if (error is not null)
-                return Results.BadRequest(new ErrorResponse(error, "VALIDATION_ERROR"));
-
             var userId = principal.GetUserId();
             if (userId is null)
                 return Results.Unauthorized();
+
+            var (error, prefs) = PreferenceValidation.Validate(req);
+            if (error is not null)
+                return Results.BadRequest(new ErrorResponse(error, "VALIDATION_ERROR"));
 
             return Results.Ok(await preferences.ReplacePreferencesAsync(userId.Value, prefs!, ct));
         });
@@ -163,13 +163,13 @@ public static class UserEndpoints
 
         group.MapPut("/me/genres", async (UpdateGenresRequest req, ClaimsPrincipal principal, IPreferenceService preferences, CancellationToken ct) =>
         {
-            var (error, slugs) = GenrePreferenceValidation.Validate(req);
-            if (error is not null)
-                return Results.BadRequest(new ErrorResponse(error, "VALIDATION_ERROR"));
-
             var userId = principal.GetUserId();
             if (userId is null)
                 return Results.Unauthorized();
+
+            var (error, slugs) = GenrePreferenceValidation.Validate(req);
+            if (error is not null)
+                return Results.BadRequest(new ErrorResponse(error, "VALIDATION_ERROR"));
 
             return Results.Ok(await preferences.ReplaceGenresAsync(userId.Value, slugs, ct));
         });

@@ -20,12 +20,14 @@ public static class ReadingEndpoints
             int publicationId, SaveLastPageRequest req, ClaimsPrincipal principal,
             IReadingService reading, CancellationToken ct) =>
         {
-            if (req.LastPageRead < 0)
-                return Results.BadRequest(new ErrorResponse("lastPageRead deve ser maior ou igual a 0.", "VALIDATION_ERROR"));
-
+            // Resolve a identidade ANTES de validar a entrada: a autorização não
+            // pode depender de valor controlado pelo usuário (CodeQL cs/user-controlled-bypass).
             var userId = principal.GetUserId();
             if (userId is null)
                 return Results.Unauthorized();
+
+            if (req.LastPageRead < 0)
+                return Results.BadRequest(new ErrorResponse("lastPageRead deve ser maior ou igual a 0.", "VALIDATION_ERROR"));
 
             var result = await reading.SaveLastPageAsync(userId.Value, publicationId, req.LastPageRead, ct);
             return result switch
