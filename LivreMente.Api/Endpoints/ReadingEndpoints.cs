@@ -40,6 +40,29 @@ public static class ReadingEndpoints
             };
         });
 
+        // RF19: atualização do percentual lido (0–100, EPUB).
+        group.MapPut("/{publicationId:int}/percentage", async (
+            int publicationId, UpdatePercentageRequest req, ClaimsPrincipal principal,
+            IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            if (req.ReadPercentage is < 0 or > 100)
+                return Results.BadRequest(new ErrorResponse("readPercentage deve estar entre 0 e 100.", "VALIDATION_ERROR"));
+
+            var result = await reading.SavePercentageAsync(userId.Value, publicationId, req.ReadPercentage, ct);
+            return result switch
+            {
+                SaveLastPageResult.Saved => Results.NoContent(),
+                SaveLastPageResult.NotEpub => Results.Json(
+                    new ErrorResponse("A publicação não é EPUB; não há percentual a salvar.", "PUBLICATION_NOT_EPUB"),
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+                _ => Results.NotFound(),
+            };
+        });
+
         // RF18: retomada de leitura — devolve a última página lida (ou null).
         group.MapGet("/{publicationId:int}/last-page", async (
             int publicationId, ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>
