@@ -179,6 +179,8 @@ tecnologias empregadas.*
 | #12 | RF04 — Preferências de gênero (M:N) | `GET`/`PUT /api/users/me/genres` + `DELETE /{genreId}`; relação **M:N** `user_genre`; tradução *slug* ↔ `genre.name` via `PreferenceCatalog` (*fan-out* na escrita, reversão na leitura); substituição por *diff* mínimo; mergeado (PR #57) |
 | — | LGPD — Consentimento e exclusão de conta | `GET`/`PUT /api/users/me/consent` (lê o consentimento; altera o *marketing*, persistido em `users.marketing_consent`); `DELETE /api/users/me` (direito à eliminação) apaga, em transação, todas as tabelas filhas e o usuário; identidade do JWT (RN04); E2E validado contra o banco de dev |
 | RF26 | Preferências do leitor (tema e *toggles*) | Extensão do `/api/users/me/preferences` com `theme` (`light\|sepia\|dark`), `resumeAuto` e `saveDictionary` (colunas em `users`); `PUT` passa a **merge parcial** (campo ausente = não tocado), permitindo perfil (EAV) e leitor gravarem no mesmo recurso sem se sobrescrever; E2E validado contra o banco de dev |
+| #19 | RF12 — Filtros de busca | `type`/`languages`/`genres` no `GET /api/publications`; `CatalogFilterValidation` traduz slugs via `PreferenceCatalog` (400 se inválido); `counts` refletem os filtros **exceto `type`**; AND entre filtros, OR dentro da lista; E2E contra o banco de dev |
+| #20 | RF13 — Detalhes da publicação | `GET /api/publications/{id:int}` público → `PublicationDetailsDto` (metadados + `authors[]` + `genres` slugs + arquivos EPUB/PDF + `publicDomain`); 404 se não existir; tradução de gênero reusada do card; E2E contra o banco de dev |
 
 Na listagem, `relevance` utiliza popularidade como critério inicial. A rota
 `/api/publications/search` é um alias público de `/api/publications`, com o

@@ -12,4 +12,7 @@ public interface IPublicationService
         int pageSize = 10,
         string? sort = null,
         CancellationToken ct = default);
+
+    /// <summary>Metadados completos de uma publicação (RF13). Null se não existir.</summary>
+    Task<PublicationDetailsDto?> GetByIdAsync(int id, CancellationToken ct = default);
 }

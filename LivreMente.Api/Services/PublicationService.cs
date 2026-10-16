@@ -127,6 +127,39 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
         return publications;
     }
 
+    public async Task<PublicationDetailsDto?> GetByIdAsync(int id, CancellationToken ct = default)
+    {
+        var p = await _db.Publications.AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => new
+            {
+                x.Id, x.Title, x.Type, x.Source, x.Language, x.Year, x.Summary,
+                x.CoverUrl, x.KnowledgeArea, x.EpubFileUrl, x.PdfFileUrl, x.CopyrightFlag,
+                Authors = x.Authors.OrderBy(a => a.Name).Select(a => a.Name).ToList(),
+                Genres = x.Genres.Select(g => g.Name).ToList(),
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (p is null)
+            return null;
+
+        // Mesma tradução nome→slug do card (livro via BookGenres; artigo via área).
+        var genreSlugs = (p.Type == PublicationType.book
+                ? p.Genres.SelectMany(name => BookGenreSlugs[name])
+                : ArticleAreaSlugs[PreferenceCatalog.ArchiveOf(p.KnowledgeArea ?? "")])
+            .Distinct().OrderBy(slug => slug).ToList();
+
+        return new PublicationDetailsDto(
+            p.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            p.Title, p.Type.ToString(), p.Source.ToString(), p.Language, p.Year,
+            p.Summary,
+            p.Type == PublicationType.scientific_article ? null : p.CoverUrl,
+            p.Authors, genreSlugs,
+            !p.CopyrightFlag,
+            p.EpubFileUrl, p.PdfFileUrl,
+            p.EpubFileUrl ?? p.PdfFileUrl);
+    }
+
     private static IQueryable<Publication> ApplySearch(IQueryable<Publication> publications, string text)
     {
         // Preserva espaços/hífens e trata metacaracteres de LIKE como texto literal.

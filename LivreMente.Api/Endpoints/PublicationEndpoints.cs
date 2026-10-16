@@ -49,6 +49,16 @@ public static class PublicationEndpoints
         .Produces<CatalogPage>(StatusCodes.Status200OK)
         .Produces<ErrorResponse>(StatusCodes.Status400BadRequest);
 
+        // Detalhes de uma publicação (RF13, #20). Público; 404 se não existir.
+        group.MapGet("/{id:int}", async (int id, IPublicationService publications, CancellationToken ct) =>
+        {
+            var details = await publications.GetByIdAsync(id, ct);
+            return details is null ? Results.NotFound() : Results.Ok(details);
+        })
+        .AllowAnonymous()
+        .Produces<PublicationDetailsDto>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status404NotFound);
+
         return group;
     }
 
