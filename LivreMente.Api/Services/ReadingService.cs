@@ -39,28 +39,26 @@ public class ReadingService(
         if (string.IsNullOrEmpty(pub.EpubFileUrl))
             return SaveLastPageResult.NotEpub;
 
-        // Upsert na estante: ler já implica "lendo". Se ainda não está na estante,
-        // cria com status = reading; caso contrário, só atualiza a última página.
-        var shelf = await _db.Shelves
-            .FirstOrDefaultAsync(s => s.UserId == userId && s.PublicationId == publicationId, ct);
+        // Upsert ATÔMICO na estante (ON CONFLICT): ler já implica "lendo", então
+        // cria com status = reading se não existir; senão só atualiza a última
+        // página. Atômico para não quebrar com auto-saves concorrentes (o
+        // find-or-create inseria em corrida e violava uq_shelf_user_publication).
+        await _db.Database.ExecuteSqlInterpolatedAsync($@"
+            INSERT INTO shelf (user_id, publication_id, status, last_page_read)
+            VALUES ({userId}, {publicationId}, 'reading'::reading_status_enum, {lastPageRead})
+            ON CONFLICT (user_id, publication_id)
+            DO UPDATE SET last_page_read = EXCLUDED.last_page_read", ct);
 
-        if (shelf is null)
-        {
-            _db.Shelves.Add(new Shelf
-            {
-                UserId = userId,
-                PublicationId = publicationId,
-                Status = ReadingStatus.reading,
-                LastPageRead = lastPageRead,
-            });
-        }
-        else
-        {
-            shelf.LastPageRead = lastPageRead;
-        }
-
-        await _db.SaveChangesAsync(ct);
         return SaveLastPageResult.Saved;
+    }
+
+    public async Task<int?> GetLastPageAsync(int userId, int publicationId, CancellationToken ct = default)
+    {
+        // Sem linha de estante OU last_page_read nulo → null (nunca leu / não salvo).
+        return await _db.Shelves.AsNoTracking()
+            .Where(s => s.UserId == userId && s.PublicationId == publicationId)
+            .Select(s => s.LastPageRead)
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task<PublicationFileResult> GetFileAsync(
