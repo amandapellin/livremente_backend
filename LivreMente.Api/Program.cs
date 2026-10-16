@@ -60,6 +60,8 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPreferenceService, PreferenceService>();
 builder.Services.AddScoped<IPublicationService, PublicationService>();
+builder.Services.AddScoped<IReadingService, ReadingService>();
+builder.Services.AddHttpClient(); // proxy dos arquivos de leitura (EPUB/PDF)
 builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -124,6 +126,7 @@ app.MapGenreEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapPublicationEndpoints();
+app.MapReadingEndpoints();
 
 app.Run();
 
