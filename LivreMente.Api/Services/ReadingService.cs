@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Net.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using LivreMente.Api.Models;
 using LivreMente.Api.Models.Enums;
 
@@ -9,10 +11,18 @@ namespace LivreMente.Api.Services;
 /// Regra de negócio do épico de Leitura. Opera sempre sobre a estante do próprio
 /// usuário (id vindo do token) — RN04 por construção.
 /// </summary>
-public class ReadingService(LivreMenteDbContext db, IHttpClientFactory httpClientFactory) : IReadingService
+public class ReadingService(
+    LivreMenteDbContext db, IHttpClientFactory httpClientFactory, IMemoryCache cache,
+    IConfiguration configuration) : IReadingService
 {
     private readonly LivreMenteDbContext _db = db;
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly IMemoryCache _cache = cache;
+    private readonly IConfiguration _configuration = configuration;
+
+    // Single-flight por arquivo: garante UMA busca no upstream mesmo com requisições
+    // concorrentes (StrictMode do dev dispara em dobro; evita 502 por concorrência).
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> FileGates = new();
 
     public async Task<SaveLastPageResult> SaveLastPageAsync(
         int userId, int publicationId, int lastPageRead, CancellationToken ct = default)
@@ -71,23 +81,85 @@ public class ReadingService(LivreMenteDbContext db, IHttpClientFactory httpClien
         if (string.IsNullOrEmpty(url))
             return new PublicationFileResult(GetFileStatus.NotAvailable, null, null);
 
-        // Busca no servidor (sem CORS) e devolve os bytes para o front consumir
-        // pela mesma origem (proxy do Vite / mesma API em produção). Com retry:
-        // Gutenberg/arXiv às vezes derrubam conexões concorrentes (visto como 502).
+        var cacheKey = $"pubfile:{publicationId}:{kind}";
+        if (_cache.TryGetValue(cacheKey, out byte[]? cached) && cached is not null)
+            return new PublicationFileResult(GetFileStatus.Ok, cached, contentType);
+
+        // Single-flight: concorrentes aguardam a mesma busca e reusam o resultado.
+        var gate = FileGates.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            if (_cache.TryGetValue(cacheKey, out cached) && cached is not null)
+                return new PublicationFileResult(GetFileStatus.Ok, cached, contentType);
+
+            // EPUB prefere a versão SEM imagens do Gutenberg (muito menor: ex. PnP
+            // 24,8 MB → 561 KB), com fallback à original. PDF usa só a URL original.
+            var candidates = kind == PublicationFileKind.Epub && PreferNoImagesEpub()
+                ? NoImagesFirst(url)
+                : [url];
+
+            var bytes = await DownloadFirstAsync(candidates, ct);
+            if (bytes is null)
+                return new PublicationFileResult(GetFileStatus.UpstreamError, null, null);
+
+            // Cacheia o arquivo (reaberturas e o fetch duplicado do StrictMode ficam instantâneos).
+            _cache.Set(cacheKey, bytes, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(30),
+                Size = bytes.Length,
+            });
+            return new PublicationFileResult(GetFileStatus.Ok, bytes, contentType);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private bool PreferNoImagesEpub() =>
+        _configuration.GetValue<bool?>("Reading:PreferNoImagesEpub") ?? true;
+
+    // Candidatos para EPUB: a versão sem imagens primeiro, a original como fallback.
+    private static string[] NoImagesFirst(string url)
+    {
+        var noImages = url
+            .Replace(".epub3.images", ".epub.noimages", StringComparison.Ordinal)
+            .Replace(".epub.images", ".epub.noimages", StringComparison.Ordinal);
+        return noImages == url ? [url] : [noImages, url];
+    }
+
+    // Tenta os candidatos em ordem; devolve o primeiro que baixar, ou null.
+    private async Task<byte[]?> DownloadFirstAsync(IReadOnlyList<string> urls, CancellationToken ct)
+    {
+        foreach (var url in urls)
+        {
+            var bytes = await DownloadWithRetryAsync(url, ct);
+            if (bytes is not null)
+                return bytes;
+        }
+        return null;
+    }
+
+    // Busca no servidor (sem CORS). 404 → null (não existe; tenta o próximo candidato).
+    // Retry só em falha transitória (rede/5xx — Gutenberg derruba conexões concorrentes).
+    private async Task<byte[]?> DownloadWithRetryAsync(string url, CancellationToken ct)
+    {
         var http = _httpClientFactory.CreateClient("publication-files");
         for (var attempt = 1; ; attempt++)
         {
             try
             {
                 using var response = await http.GetAsync(url, ct);
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    return null;
                 response.EnsureSuccessStatusCode();
-                var bytes = await response.Content.ReadAsByteArrayAsync(ct);
-                return new PublicationFileResult(GetFileStatus.Ok, bytes, contentType);
+                return await response.Content.ReadAsByteArrayAsync(ct);
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
             {
                 if (attempt >= 3)
-                    return new PublicationFileResult(GetFileStatus.UpstreamError, null, null);
+                    return null;
                 await Task.Delay(TimeSpan.FromMilliseconds(400 * attempt), ct);
             }
         }

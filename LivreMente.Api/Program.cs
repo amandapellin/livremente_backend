@@ -62,6 +62,8 @@ builder.Services.AddScoped<IPreferenceService, PreferenceService>();
 builder.Services.AddScoped<IPublicationService, PublicationService>();
 builder.Services.AddScoped<IReadingService, ReadingService>();
 builder.Services.AddHttpClient(); // proxy dos arquivos de leitura (EPUB/PDF)
+builder.Services.AddMemoryCache(o => o.SizeLimit = 256L * 1024 * 1024); // cache dos arquivos de leitura (bytes), limite ~256 MB
+builder.Services.AddHostedService<PopularBooksCacheWarmer>(); // pré-aquece o cache dos livros populares no startup
 builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
