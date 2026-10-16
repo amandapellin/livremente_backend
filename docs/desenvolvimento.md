@@ -181,6 +181,7 @@ tecnologias empregadas.*
 | RF26 | Preferências do leitor (tema e *toggles*) | Extensão do `/api/users/me/preferences` com `theme` (`light\|sepia\|dark`), `resumeAuto` e `saveDictionary` (colunas em `users`); `PUT` passa a **merge parcial** (campo ausente = não tocado), permitindo perfil (EAV) e leitor gravarem no mesmo recurso sem se sobrescrever; E2E validado contra o banco de dev |
 | #19 | RF12 — Filtros de busca | `type`/`languages`/`genres` no `GET /api/publications`; `CatalogFilterValidation` traduz slugs via `PreferenceCatalog` (400 se inválido); `counts` refletem os filtros **exceto `type`**; AND entre filtros, OR dentro da lista; E2E contra o banco de dev |
 | #20 | RF13 — Detalhes da publicação | `GET /api/publications/{id:int}` público → `PublicationDetailsDto` (metadados + `authors[]` + `genres` slugs + arquivos EPUB/PDF + `publicDomain`); 404 se não existir; tradução de gênero reusada do card; E2E contra o banco de dev |
+| #21 | RF14 — Dados resumidos do card | Coberta pela #17: `PublicationCardDto` (capa/título/ano/autor/gênero/fonte + `id`); capa nula para artigo na projeção do `ListAsync`, sem erro; verificado por E2E (card de livro e de artigo) |
 
 Na listagem, `relevance` utiliza popularidade como critério inicial. A rota
 `/api/publications/search` é um alias público de `/api/publications`, com o
