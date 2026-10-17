@@ -27,6 +27,9 @@ public record PublicationFileResult(GetFileStatus Status, byte[]? Content, strin
 // NotEpub). Highlight != null só quando Saved.
 public record CreateHighlightResult(SaveLastPageResult Status, Dtos.HighlightDto? Highlight);
 
+// Idem para anotação (RF23). Annotation != null só quando Saved.
+public record CreateAnnotationResult(SaveLastPageResult Status, Dtos.AnnotationDto? Annotation);
+
 public interface IReadingService
 {
     /// <summary>
@@ -85,6 +88,18 @@ public interface IReadingService
     /// Lista os grifos do par usuário/publicação (RF22), mais recentes primeiro.
     /// </summary>
     Task<IReadOnlyList<Dtos.HighlightDto>> GetHighlightsAsync(int userId, int publicationId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Cria uma anotação (RF23/RN07) em `annotation`. **Só EPUB** (publicação com
+    /// `epub_file_url`); não-EPUB → NotEpub; inexistente → PublicationNotFound.
+    /// Devolve a anotação criada (com id e create_date do banco) quando Saved.
+    /// </summary>
+    Task<CreateAnnotationResult> CreateAnnotationAsync(int userId, int publicationId, Dtos.CreateAnnotationRequest req, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lista as anotações do par usuário/publicação (RF23), mais recentes primeiro.
+    /// </summary>
+    Task<IReadOnlyList<Dtos.AnnotationDto>> GetAnnotationsAsync(int userId, int publicationId, CancellationToken ct = default);
 
     /// <summary>
     /// Baixa, no servidor, o arquivo (EPUB/PDF) da fonte externa e o devolve em

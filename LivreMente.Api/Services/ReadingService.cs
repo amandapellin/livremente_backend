@@ -193,6 +193,47 @@ public class ReadingService(
             .ToListAsync(ct);
     }
 
+    public async Task<CreateAnnotationResult> CreateAnnotationAsync(
+        int userId, int publicationId, CreateAnnotationRequest req, CancellationToken ct = default)
+    {
+        // RN07: anotação só para EPUB (publicação com epub_file_url).
+        var pub = await _db.Publications.AsNoTracking()
+            .Where(p => p.Id == publicationId)
+            .Select(p => new { p.EpubFileUrl })
+            .FirstOrDefaultAsync(ct);
+
+        if (pub is null)
+            return new CreateAnnotationResult(SaveLastPageResult.PublicationNotFound, null);
+        if (string.IsNullOrEmpty(pub.EpubFileUrl))
+            return new CreateAnnotationResult(SaveLastPageResult.NotEpub, null);
+
+        var annotation = new Annotation
+        {
+            UserId = userId,
+            PublicationId = publicationId,
+            LinkedExcerpt = req.LinkedExcerpt,
+            Content = req.Content,
+            EpubPosition = req.EpubPosition,
+            // CreateDate tem default no banco (CURRENT_TIMESTAMP) e é lido de volta.
+        };
+        _db.Annotations.Add(annotation);
+        await _db.SaveChangesAsync(ct);
+
+        var dto = new AnnotationDto(
+            annotation.Id, annotation.LinkedExcerpt, annotation.Content, annotation.EpubPosition, annotation.CreateDate);
+        return new CreateAnnotationResult(SaveLastPageResult.Saved, dto);
+    }
+
+    public async Task<IReadOnlyList<AnnotationDto>> GetAnnotationsAsync(
+        int userId, int publicationId, CancellationToken ct = default)
+    {
+        return await _db.Annotations.AsNoTracking()
+            .Where(a => a.UserId == userId && a.PublicationId == publicationId)
+            .OrderByDescending(a => a.CreateDate).ThenByDescending(a => a.Id)
+            .Select(a => new AnnotationDto(a.Id, a.LinkedExcerpt, a.Content, a.EpubPosition, a.CreateDate))
+            .ToListAsync(ct);
+    }
+
     public async Task<PublicationFileResult> GetFileAsync(
         int publicationId, PublicationFileKind kind, CancellationToken ct = default)
     {
