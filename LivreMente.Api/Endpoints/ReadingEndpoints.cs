@@ -11,6 +11,12 @@ namespace LivreMente.Api.Endpoints;
 /// </summary>
 public static class ReadingEndpoints
 {
+    // Cores de grifo aceitas (slugs do front; casam com o CHECK highlight_color_check).
+    private static readonly HashSet<string> AllowedHighlightColors = new(StringComparer.Ordinal)
+    {
+        "amarelo", "verde", "azul", "rosa",
+    };
+
     public static RouteGroupBuilder MapReadingEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/reading").WithTags("Reading").RequireAuthorization();
@@ -121,6 +127,45 @@ public static class ReadingEndpoints
 
             var page = await reading.GetBookmarkAsync(userId.Value, publicationId, ct);
             return Results.Ok(new BookmarkDto(page));
+        });
+
+        // RF22/RN07: cria um grifo (só EPUB).
+        group.MapPost("/{publicationId:int}/highlights", async (
+            int publicationId, CreateHighlightRequest req, ClaimsPrincipal principal,
+            IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(req.Excerpt))
+                return Results.BadRequest(new ErrorResponse("excerpt é obrigatório.", "VALIDATION_ERROR"));
+            if (string.IsNullOrWhiteSpace(req.EpubPosition) || req.EpubPosition.Length > 255)
+                return Results.BadRequest(new ErrorResponse("epubPosition é obrigatório e deve ter no máximo 255 caracteres.", "VALIDATION_ERROR"));
+            if (!AllowedHighlightColors.Contains(req.Color))
+                return Results.BadRequest(new ErrorResponse("color inválida (use amarelo, verde, azul ou rosa).", "VALIDATION_ERROR"));
+
+            var result = await reading.CreateHighlightAsync(userId.Value, publicationId, req, ct);
+            return result.Status switch
+            {
+                SaveLastPageResult.Saved => Results.Json(result.Highlight, statusCode: StatusCodes.Status201Created),
+                SaveLastPageResult.NotEpub => Results.Json(
+                    new ErrorResponse("A publicação não é EPUB; grifos são permitidos apenas em EPUB (RN07).", "PUBLICATION_NOT_EPUB"),
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+                _ => Results.NotFound(),
+            };
+        });
+
+        // RF22: lista os grifos do usuário para a publicação.
+        group.MapGet("/{publicationId:int}/highlights", async (
+            int publicationId, ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var highlights = await reading.GetHighlightsAsync(userId.Value, publicationId, ct);
+            return Results.Ok(highlights);
         });
 
         // RF18: retomada de leitura — devolve a última página lida (ou null).

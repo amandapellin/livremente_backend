@@ -129,6 +129,9 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.EpubPosition)
                 .HasMaxLength(255)
                 .HasColumnName("epub_position");
+            entity.Property(e => e.Color)
+                .HasMaxLength(10)
+                .HasColumnName("color");
             entity.Property(e => e.Excerpt).HasColumnName("excerpt");
             entity.Property(e => e.PublicationId).HasColumnName("publication_id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
