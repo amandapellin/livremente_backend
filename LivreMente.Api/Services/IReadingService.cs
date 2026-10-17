@@ -60,7 +60,7 @@ public interface IReadingService
     /// Marcação manual de página (RF21): grava `bookmarked_page` na estante do
     /// usuário. Vale para EPUB e PDF (sem restrição de formato); cria a linha de
     /// estante (status = reading) se não existir. Retorna false se a publicação
-    /// não existe. O > 0 (1-based, CHECK do banco) é validado no endpoint.
+    /// não existe. O >= 0 (0-based, como o last_page_read) é validado no endpoint.
     /// </summary>
     Task<bool> SaveBookmarkAsync(int userId, int publicationId, int bookmarkedPage, CancellationToken ct = default);
 

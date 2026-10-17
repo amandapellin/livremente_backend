@@ -102,9 +102,10 @@ public static class ReadingEndpoints
             if (userId is null)
                 return Results.Unauthorized();
 
-            // CHECK do banco: shelf_bookmarked_page_check (bookmarked_page > 0) — 1-based.
-            if (req.BookmarkedPage < 1)
-                return Results.BadRequest(new ErrorResponse("bookmarkedPage deve ser maior que 0.", "VALIDATION_ERROR"));
+            // Posição/location do leitor; 0-based como o last_page_read (CHECK
+            // shelf_bookmarked_page_check relaxado para >= 0 — ver migração da #26).
+            if (req.BookmarkedPage < 0)
+                return Results.BadRequest(new ErrorResponse("bookmarkedPage deve ser maior ou igual a 0.", "VALIDATION_ERROR"));
 
             var ok = await reading.SaveBookmarkAsync(userId.Value, publicationId, req.BookmarkedPage, ct);
             return ok ? Results.NoContent() : Results.NotFound();
