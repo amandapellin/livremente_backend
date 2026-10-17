@@ -57,6 +57,20 @@ public interface IReadingService
     Task<bool> UpdateSessionAsync(int userId, int sessionId, int activeSeconds, CancellationToken ct = default);
 
     /// <summary>
+    /// Marcação manual de página (RF21): grava `bookmarked_page` na estante do
+    /// usuário. Vale para EPUB e PDF (sem restrição de formato); cria a linha de
+    /// estante (status = reading) se não existir. Retorna false se a publicação
+    /// não existe. O >= 0 (0-based, como o last_page_read) é validado no endpoint.
+    /// </summary>
+    Task<bool> SaveBookmarkAsync(int userId, int publicationId, int bookmarkedPage, CancellationToken ct = default);
+
+    /// <summary>
+    /// Leitura da marcação manual (RF21): a página marcada do par usuário/publicação,
+    /// ou null se não há marcação (sem linha de estante ou `bookmarked_page` nulo).
+    /// </summary>
+    Task<int?> GetBookmarkAsync(int userId, int publicationId, CancellationToken ct = default);
+
+    /// <summary>
     /// Baixa, no servidor, o arquivo (EPUB/PDF) da fonte externa e o devolve em
     /// bytes, para o front consumi-lo pela mesma origem (sem CORS). RF15/RF16.
     /// </summary>
