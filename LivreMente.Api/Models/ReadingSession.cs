@@ -15,6 +15,8 @@ public partial class ReadingSession
 
     public DateTime? EndTime { get; set; }
 
+    public int ActiveSeconds { get; set; }
+
     public virtual Publication Publication { get; set; } = null!;
 
     public virtual User User { get; set; } = null!;
