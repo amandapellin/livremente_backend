@@ -93,6 +93,35 @@ public static class ReadingEndpoints
             };
         });
 
+        // RF21: marcação manual de página (bookmark). EPUB e PDF (sem restrição).
+        group.MapPut("/{publicationId:int}/bookmark", async (
+            int publicationId, SaveBookmarkRequest req, ClaimsPrincipal principal,
+            IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            // CHECK do banco: shelf_bookmarked_page_check (bookmarked_page > 0) — 1-based.
+            if (req.BookmarkedPage < 1)
+                return Results.BadRequest(new ErrorResponse("bookmarkedPage deve ser maior que 0.", "VALIDATION_ERROR"));
+
+            var ok = await reading.SaveBookmarkAsync(userId.Value, publicationId, req.BookmarkedPage, ct);
+            return ok ? Results.NoContent() : Results.NotFound();
+        });
+
+        // RF21: devolve a página marcada manualmente (ou null).
+        group.MapGet("/{publicationId:int}/bookmark", async (
+            int publicationId, ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var page = await reading.GetBookmarkAsync(userId.Value, publicationId, ct);
+            return Results.Ok(new BookmarkDto(page));
+        });
+
         // RF18: retomada de leitura — devolve a última página lida (ou null).
         group.MapGet("/{publicationId:int}/last-page", async (
             int publicationId, ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>

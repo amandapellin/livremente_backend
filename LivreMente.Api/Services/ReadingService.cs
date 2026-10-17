@@ -121,6 +121,36 @@ public class ReadingService(
             .FirstOrDefaultAsync(ct);
     }
 
+    public async Task<bool> SaveBookmarkAsync(
+        int userId, int publicationId, int bookmarkedPage, CancellationToken ct = default)
+    {
+        // RF21: a marcação vale para EPUB e PDF — basta a publicação existir (sem
+        // gate de formato, diferente do last-page/percentage).
+        var exists = await _db.Publications.AsNoTracking().AnyAsync(p => p.Id == publicationId, ct);
+        if (!exists)
+            return false;
+
+        // Upsert atômico (ON CONFLICT), mesma proteção contra corrida dos auto-saves:
+        // marcar implica "lendo", então cria com status = reading; no conflito só
+        // atualiza bookmarked_page (não toca em status/last_page_read/read_percentage).
+        await _db.Database.ExecuteSqlInterpolatedAsync($@"
+            INSERT INTO shelf (user_id, publication_id, status, bookmarked_page)
+            VALUES ({userId}, {publicationId}, 'reading'::reading_status_enum, {bookmarkedPage})
+            ON CONFLICT (user_id, publication_id)
+            DO UPDATE SET bookmarked_page = EXCLUDED.bookmarked_page", ct);
+
+        return true;
+    }
+
+    public async Task<int?> GetBookmarkAsync(int userId, int publicationId, CancellationToken ct = default)
+    {
+        // Sem linha de estante OU bookmarked_page nulo → null (sem marcação).
+        return await _db.Shelves.AsNoTracking()
+            .Where(s => s.UserId == userId && s.PublicationId == publicationId)
+            .Select(s => s.BookmarkedPage)
+            .FirstOrDefaultAsync(ct);
+    }
+
     public async Task<PublicationFileResult> GetFileAsync(
         int publicationId, PublicationFileKind kind, CancellationToken ct = default)
     {
