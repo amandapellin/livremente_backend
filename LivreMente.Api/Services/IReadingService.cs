@@ -23,6 +23,10 @@ public enum GetFileStatus
 
 public record PublicationFileResult(GetFileStatus Status, byte[]? Content, string? ContentType);
 
+// Status reusa SaveLastPageResult (mesma família EPUB-only: Saved/PublicationNotFound/
+// NotEpub). Highlight != null só quando Saved.
+public record CreateHighlightResult(SaveLastPageResult Status, Dtos.HighlightDto? Highlight);
+
 public interface IReadingService
 {
     /// <summary>
@@ -69,6 +73,18 @@ public interface IReadingService
     /// ou null se não há marcação (sem linha de estante ou `bookmarked_page` nulo).
     /// </summary>
     Task<int?> GetBookmarkAsync(int userId, int publicationId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Cria um grifo (RF22/RN07) em `highlight`. **Só EPUB** (publicação com
+    /// `epub_file_url`); não-EPUB → NotEpub; inexistente → PublicationNotFound.
+    /// Devolve o grifo criado (com id e create_date do banco) quando Saved.
+    /// </summary>
+    Task<CreateHighlightResult> CreateHighlightAsync(int userId, int publicationId, Dtos.CreateHighlightRequest req, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lista os grifos do par usuário/publicação (RF22), mais recentes primeiro.
+    /// </summary>
+    Task<IReadOnlyList<Dtos.HighlightDto>> GetHighlightsAsync(int userId, int publicationId, CancellationToken ct = default);
 
     /// <summary>
     /// Baixa, no servidor, o arquivo (EPUB/PDF) da fonte externa e o devolve em

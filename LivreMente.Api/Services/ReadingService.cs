@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using LivreMente.Api.Dtos;
 using LivreMente.Api.Models;
 using LivreMente.Api.Models.Enums;
 
@@ -149,6 +150,47 @@ public class ReadingService(
             .Where(s => s.UserId == userId && s.PublicationId == publicationId)
             .Select(s => s.BookmarkedPage)
             .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<CreateHighlightResult> CreateHighlightAsync(
+        int userId, int publicationId, CreateHighlightRequest req, CancellationToken ct = default)
+    {
+        // RN07: grifo só para EPUB (publicação com epub_file_url).
+        var pub = await _db.Publications.AsNoTracking()
+            .Where(p => p.Id == publicationId)
+            .Select(p => new { p.EpubFileUrl })
+            .FirstOrDefaultAsync(ct);
+
+        if (pub is null)
+            return new CreateHighlightResult(SaveLastPageResult.PublicationNotFound, null);
+        if (string.IsNullOrEmpty(pub.EpubFileUrl))
+            return new CreateHighlightResult(SaveLastPageResult.NotEpub, null);
+
+        var highlight = new Highlight
+        {
+            UserId = userId,
+            PublicationId = publicationId,
+            Excerpt = req.Excerpt,
+            EpubPosition = req.EpubPosition,
+            Color = req.Color,
+            // CreateDate tem default no banco (CURRENT_TIMESTAMP) e é lido de volta.
+        };
+        _db.Highlights.Add(highlight);
+        await _db.SaveChangesAsync(ct);
+
+        var dto = new HighlightDto(
+            highlight.Id, highlight.Excerpt, highlight.EpubPosition, highlight.Color, highlight.CreateDate);
+        return new CreateHighlightResult(SaveLastPageResult.Saved, dto);
+    }
+
+    public async Task<IReadOnlyList<HighlightDto>> GetHighlightsAsync(
+        int userId, int publicationId, CancellationToken ct = default)
+    {
+        return await _db.Highlights.AsNoTracking()
+            .Where(h => h.UserId == userId && h.PublicationId == publicationId)
+            .OrderByDescending(h => h.CreateDate).ThenByDescending(h => h.Id)
+            .Select(h => new HighlightDto(h.Id, h.Excerpt, h.EpubPosition, h.Color, h.CreateDate))
+            .ToListAsync(ct);
     }
 
     public async Task<PublicationFileResult> GetFileAsync(

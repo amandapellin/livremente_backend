@@ -15,6 +15,8 @@ public partial class Highlight
 
     public string EpubPosition { get; set; } = null!;
 
+    public string Color { get; set; } = null!;
+
     public DateTime CreateDate { get; set; }
 
     public virtual Publication Publication { get; set; } = null!;
