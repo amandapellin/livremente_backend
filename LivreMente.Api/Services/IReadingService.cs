@@ -102,6 +102,13 @@ public interface IReadingService
     Task<IReadOnlyList<Dtos.AnnotationDto>> GetAnnotationsAsync(int userId, int publicationId, CancellationToken ct = default);
 
     /// <summary>
+    /// Snapshot de "reabrir obra" (RF24): grifos + anotações do par usuário/publicação.
+    /// Listas vazias (nunca erro) quando não há nenhum. Não restringe formato (quem não
+    /// é EPUB simplesmente não tem grifos/anotações).
+    /// </summary>
+    Task<Dtos.ReadingNotesDto> GetHighlightsAndAnnotationsAsync(int userId, int publicationId, CancellationToken ct = default);
+
+    /// <summary>
     /// Baixa, no servidor, o arquivo (EPUB/PDF) da fonte externa e o devolve em
     /// bytes, para o front consumi-lo pela mesma origem (sem CORS). RF15/RF16.
     /// </summary>

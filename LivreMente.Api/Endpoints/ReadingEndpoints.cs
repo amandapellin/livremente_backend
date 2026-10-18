@@ -207,6 +207,19 @@ public static class ReadingEndpoints
             return Results.Ok(annotations);
         });
 
+        // RF24: ao reabrir a obra, grifos + anotações num único snapshot (listas
+        // vazias quando não há nada; nunca erro).
+        group.MapGet("/{publicationId:int}/highlights-annotations", async (
+            int publicationId, ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var notes = await reading.GetHighlightsAndAnnotationsAsync(userId.Value, publicationId, ct);
+            return Results.Ok(notes);
+        });
+
         // RF18: retomada de leitura — devolve a última página lida (ou null).
         group.MapGet("/{publicationId:int}/last-page", async (
             int publicationId, ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>
