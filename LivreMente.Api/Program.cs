@@ -61,7 +61,14 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPreferenceService, PreferenceService>();
 builder.Services.AddScoped<IPublicationService, PublicationService>();
 builder.Services.AddScoped<IReadingService, ReadingService>();
+builder.Services.AddScoped<IDictionaryService, DictionaryService>();
 builder.Services.AddHttpClient(); // proxy dos arquivos de leitura (EPUB/PDF)
+// Dicionário (RF07): fonte externa. BaseAddress configurável (Dictionary:BaseUrl).
+builder.Services.AddHttpClient("dictionary", c =>
+{
+    c.BaseAddress = new Uri(builder.Configuration["Dictionary:BaseUrl"] ?? "https://api.dictionaryapi.dev/");
+    c.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddMemoryCache(o => o.SizeLimit = 256L * 1024 * 1024); // cache dos arquivos de leitura (bytes), limite ~256 MB
 builder.Services.AddHostedService<PopularBooksCacheWarmer>(); // pré-aquece o cache dos livros populares no startup
 builder.Services.ConfigureHttpJsonOptions(o =>
@@ -129,6 +136,7 @@ app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapPublicationEndpoints();
 app.MapReadingEndpoints();
+app.MapDictionaryEndpoints();
 
 app.Run();
 
