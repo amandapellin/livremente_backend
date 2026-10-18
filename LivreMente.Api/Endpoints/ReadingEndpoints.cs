@@ -232,18 +232,18 @@ public static class ReadingEndpoints
             return Results.Ok(new LastPageReadDto(lastPage));
         });
 
-        // RF15/RF16: proxy dos arquivos de leitura. Público (conteúdo de acesso
-        // aberto; a rota /leitura não é autenticada). O servidor busca na fonte
-        // externa (sem CORS) e transmite pela mesma origem do front.
+        // RF15/RF16: proxy dos arquivos de leitura. **Exige autenticação** (consultar
+        // o acervo é público, mas LER exige login) — herda o RequireAuthorization do
+        // grupo. O front busca o arquivo via fetch com o JWT (ArrayBuffer p/ o epub.js;
+        // Blob URL p/ o iframe do PDF), já que epub.js/iframe não enviam o header.
+        // O servidor busca na fonte externa (sem CORS) e transmite pela mesma origem.
         group.MapGet("/{publicationId:int}/epub",
             (int publicationId, IReadingService reading, CancellationToken ct) =>
-                ServeFileAsync(reading, publicationId, PublicationFileKind.Epub, ct))
-            .AllowAnonymous();
+                ServeFileAsync(reading, publicationId, PublicationFileKind.Epub, ct));
 
         group.MapGet("/{publicationId:int}/pdf",
             (int publicationId, IReadingService reading, CancellationToken ct) =>
-                ServeFileAsync(reading, publicationId, PublicationFileKind.Pdf, ct))
-            .AllowAnonymous();
+                ServeFileAsync(reading, publicationId, PublicationFileKind.Pdf, ct));
 
         return group;
     }
