@@ -234,6 +234,15 @@ public class ReadingService(
             .ToListAsync(ct);
     }
 
+    public async Task<ReadingNotesDto> GetHighlightsAndAnnotationsAsync(
+        int userId, int publicationId, CancellationToken ct = default)
+    {
+        // Sequencial (o DbContext não é thread-safe para consultas concorrentes).
+        var highlights = await GetHighlightsAsync(userId, publicationId, ct);
+        var annotations = await GetAnnotationsAsync(userId, publicationId, ct);
+        return new ReadingNotesDto(highlights, annotations);
+    }
+
     public async Task<PublicationFileResult> GetFileAsync(
         int publicationId, PublicationFileKind kind, CancellationToken ct = default)
     {
