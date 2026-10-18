@@ -55,6 +55,21 @@ public class DictionaryService(
         return new DictionaryLookupResult(DictionaryLookupStatus.Ok, entry);
     }
 
+    public async Task<IReadOnlyList<WordLookupHistoryDto>> GetHistoryAsync(
+        int userId, bool descending, CancellationToken ct = default)
+    {
+        // Uma entrada por consulta (RF08); join na publicação para a obra de origem.
+        // Desempate por Id na mesma ordem para estabilidade.
+        var query = _db.WordLookups.AsNoTracking().Where(w => w.UserId == userId);
+        query = descending
+            ? query.OrderByDescending(w => w.ConsultDate).ThenByDescending(w => w.Id)
+            : query.OrderBy(w => w.ConsultDate).ThenBy(w => w.Id);
+
+        return await query
+            .Select(w => new WordLookupHistoryDto(w.Word, w.ConsultDate, w.PublicationId, w.Publication.Title))
+            .ToListAsync(ct);
+    }
+
     private static string MapLanguage(string? language) =>
         language is not null && DictLang.TryGetValue(language, out var mapped) ? mapped : "en";
 

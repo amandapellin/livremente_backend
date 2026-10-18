@@ -22,4 +22,11 @@ public interface IDictionaryService
     /// PublicationNotFound; sem verbete → WordNotFound; falha na fonte → SourceUnavailable.
     /// </summary>
     Task<DictionaryLookupResult> LookupAsync(int userId, int publicationId, string word, CancellationToken ct = default);
+
+    /// <summary>
+    /// Histórico de palavras consultadas pelo usuário (RF08), uma entrada por
+    /// consulta, incluindo a obra de origem. Ordenado por data de consulta —
+    /// `descending = true` (mais recentes primeiro) ou falso (mais antigas primeiro).
+    /// </summary>
+    Task<IReadOnlyList<Dtos.WordLookupHistoryDto>> GetHistoryAsync(int userId, bool descending, CancellationToken ct = default);
 }

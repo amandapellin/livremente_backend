@@ -44,6 +44,20 @@ public static class DictionaryEndpoints
             };
         });
 
+        // RF08: histórico de palavras consultadas pelo usuário (perfil), com a obra
+        // de origem. `order` = `recent` (padrão, mais recentes primeiro) ou `oldest`.
+        group.MapGet("/history", async (
+            ClaimsPrincipal principal, IDictionaryService dictionary, string? order, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var descending = !string.Equals(order, "oldest", StringComparison.OrdinalIgnoreCase);
+            var history = await dictionary.GetHistoryAsync(userId.Value, descending, ct);
+            return Results.Ok(history);
+        });
+
         return group;
     }
 }
