@@ -168,6 +168,45 @@ public static class ReadingEndpoints
             return Results.Ok(highlights);
         });
 
+        // RF23/RN07: cria uma anotação vinculada a um trecho (só EPUB).
+        group.MapPost("/{publicationId:int}/annotations", async (
+            int publicationId, CreateAnnotationRequest req, ClaimsPrincipal principal,
+            IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            if (string.IsNullOrWhiteSpace(req.LinkedExcerpt))
+                return Results.BadRequest(new ErrorResponse("linkedExcerpt é obrigatório.", "VALIDATION_ERROR"));
+            if (string.IsNullOrWhiteSpace(req.Content))
+                return Results.BadRequest(new ErrorResponse("content é obrigatório.", "VALIDATION_ERROR"));
+            if (string.IsNullOrWhiteSpace(req.EpubPosition) || req.EpubPosition.Length > 255)
+                return Results.BadRequest(new ErrorResponse("epubPosition é obrigatório e deve ter no máximo 255 caracteres.", "VALIDATION_ERROR"));
+
+            var result = await reading.CreateAnnotationAsync(userId.Value, publicationId, req, ct);
+            return result.Status switch
+            {
+                SaveLastPageResult.Saved => Results.Json(result.Annotation, statusCode: StatusCodes.Status201Created),
+                SaveLastPageResult.NotEpub => Results.Json(
+                    new ErrorResponse("A publicação não é EPUB; anotações são permitidas apenas em EPUB (RN07).", "PUBLICATION_NOT_EPUB"),
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+                _ => Results.NotFound(),
+            };
+        });
+
+        // RF23: lista as anotações do usuário para a publicação.
+        group.MapGet("/{publicationId:int}/annotations", async (
+            int publicationId, ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var annotations = await reading.GetAnnotationsAsync(userId.Value, publicationId, ct);
+            return Results.Ok(annotations);
+        });
+
         // RF18: retomada de leitura — devolve a última página lida (ou null).
         group.MapGet("/{publicationId:int}/last-page", async (
             int publicationId, ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>
