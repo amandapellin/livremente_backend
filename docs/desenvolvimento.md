@@ -154,6 +154,43 @@ implementa ainda o **direito à eliminação**: a exclusão de conta remove, em 
 leitura, grifos, anotações, consultas e credenciais), garantindo que nenhum
 resíduo permaneça após a solicitação.
 
+### 3.1.11 Recursos de leitura e integrações em tempo de execução
+
+A experiência de leitura concentra um conjunto de recursos que exigiram
+integrações em tempo de execução, distintas da importação do acervo (descrita em
+3.1.7, que ocorre em lote e à parte).
+
+O leitor não obtém os arquivos (EPUB/PDF) diretamente das fontes externas no
+navegador, por duas limitações técnicas: as fontes não emitem os cabeçalhos de
+**compartilhamento de recursos entre origens (CORS)** e, no caso do EPUB sem
+extensão explícita, o leitor de EPUB do front interpretaria a URL como diretório.
+Adotou-se, por isso, um **proxy no servidor**: a API baixa o arquivo da fonte
+(sem a restrição de CORS, com repetição em caso de falha) e o transmite ao front
+pela mesma origem, com o tipo de conteúdo adequado. Para evitar baixar
+repetidamente arquivos grandes — e contornar a limitação de banda das fontes —,
+o proxy mantém um **cache em memória** com *single-flight* (uma única busca na
+origem ainda que haja requisições concorrentes) e, para livros, prefere a
+**variante do EPUB sem imagens** (substancialmente menor); um serviço de segundo
+plano **pré-aquece** o cache dos livros mais populares na inicialização.
+
+O progresso de leitura (última página, percentual e marcação manual de página) e
+as **sessões de leitura** (tempo de tela ativa) são persistidos por usuário.
+Como o salvamento é automático e pode ocorrer de forma concorrente, as escritas
+na estante empregam **inserção atômica com resolução de conflito** (`INSERT ...
+ON CONFLICT`), respeitando a unicidade do vínculo usuário/publicação sem recorrer
+a bloqueios. Os **grifos** e as **anotações** — restritos a arquivos EPUB por
+regra de negócio (RN07) — vinculam-se a uma **posição no texto** (referência
+canônica do EPUB, *CFI*), de modo que podem ser reexibidos ao reabrir a obra.
+
+O **dicionário integrado** (RF07) permite consultar o significado de uma palavra
+sem sair da leitura. A consulta é atendida por uma **fonte externa** de
+dicionário, acessada por um cliente HTTP dedicado, com o **idioma derivado da
+publicação** em leitura (e recuo para o inglês quando o idioma não é suportado).
+Apenas o **evento de consulta** é persistido (a palavra e a obra, não o
+significado) e somente quando o leitor consente, por meio de um ajuste de
+preferência (*toggle* de histórico) — concretizando, na prática, o controle do
+usuário sobre os próprios dados.
+
 ---
 
 ## Apêndice — Registro de evolução por issue
@@ -174,7 +211,7 @@ tecnologias empregadas.*
 | #10 | RF03 — Edição de perfil | Endpoints autenticados (`[Authorize]`) sob `/api/users/me`; identidade do usuário lida do *claim* `sub` do JWT (RN04 por construção, sem IDOR); edição do nome e troca de senha (verifica a senha atual antes de regravar o *hash*); **avatar** enviado por *multipart*, validado por *magic bytes* (PNG/JPG, ≤ 2 MB) e armazenado como `bytea` no banco, servido por endpoint público |
 | #13 | RF29 — Logout | Revogação do refresh token pelo hash e proprietário; JWT obrigatório; testes HTTP 204/401; integrado em `develop` pelo PR #58 |
 | #18 | RF11 — Busca por palavra-chave | EF Core/Npgsql com `unaccent` + `ILIKE` em título/autor; paginação e DTO; integrado pelo PR #52 |
-| #17 | RF10 — Listagem do catálogo | GET público; `CatalogPage`, cards, contagens por tipo, paginação validada, busca opcional, ordenação estável e tradução de gêneros/áreas para slugs; 24 requisições HTTP aprovadas contra PostgreSQL em 07/10/2026; implementado na branch, aguardando revisão e merge |
+| #17 | RF10 — Listagem do catálogo | GET público; `CatalogPage`, cards, contagens por tipo, paginação validada, busca opcional, ordenação estável e tradução de gêneros/áreas para slugs; 24 requisições HTTP aprovadas contra PostgreSQL em 07/10/2026; mergeado (PR #60) |
 | #11 | RF04 — Preferências de leitura (EAV) | `GET`/`PUT /api/users/me/preferences` autenticado; modelo **EAV** em `user_preference` (idioma, tipo de conteúdo, área de conhecimento); contrato `{ languages, contentTypes, knowledgeAreas }`; `knowledge_area` gravada traduzida em *archives* (reversão no GET); substituição idempotente por tipo; mergeado (PR #56) |
 | #12 | RF04 — Preferências de gênero (M:N) | `GET`/`PUT /api/users/me/genres` + `DELETE /{genreId}`; relação **M:N** `user_genre`; tradução *slug* ↔ `genre.name` via `PreferenceCatalog` (*fan-out* na escrita, reversão na leitura); substituição por *diff* mínimo; mergeado (PR #57) |
 | — | LGPD — Consentimento e exclusão de conta | `GET`/`PUT /api/users/me/consent` (lê o consentimento; altera o *marketing*, persistido em `users.marketing_consent`); `DELETE /api/users/me` (direito à eliminação) apaga, em transação, todas as tabelas filhas e o usuário; identidade do JWT (RN04); E2E validado contra o banco de dev |
@@ -186,6 +223,12 @@ tecnologias empregadas.*
 | #23 | RF18 — Retomada de leitura | `GET /api/reading/{id}/last-page` autenticado → `{ lastPageRead: int\|null }`; `GetLastPageAsync` lê `shelf` do par usuário/publicação; null se nunca leu; E2E contra o banco de dev |
 | #24 | RF19 — Percentual lido | `PUT /api/reading/{id}/percentage` autenticado; `SavePercentageAsync` valida EPUB e faz upsert atômico em `shelf.read_percentage`; valor 0–100 (senão 400); não-EPUB 422; E2E contra o banco de dev |
 | #25 | RF20 — Tempo de sessão | Modelado na `reading_session` (histórico por sessão); coluna `active_seconds` (tempo ativo); `POST /api/reading/{id}/session` abre a sessão → `{ sessionId }`; `PUT /api/reading/sessions/{id} { activeSeconds }` é heartbeat/encerramento (grava `active_seconds`, move `end_time`); EPUB e PDF; RN04 (só a própria sessão); E2E contra o banco de dev |
+| — | RF15 / RF16 — Proxy dos arquivos de leitura | `GET /api/reading/{id}/epub` e `/pdf` **públicos**; busca no servidor via `IHttpClientFactory` (sem CORS, com repetição) e transmite pela mesma origem; **cache em memória + *single-flight*** (`IMemoryCache`, `SemaphoreSlim`), **EPUB sem imagens** (variante menor, com *fallback*) e **pré-aquecimento** dos populares no *startup* (`BackgroundService`); 404/502 `UPSTREAM_ERROR`; verificado no navegador |
+| #26 | RF21 — Marcação manual de página | `PUT`/`GET /api/reading/{id}/bookmark` autenticado; upsert atômico em `shelf.bookmarked_page`; **EPUB e PDF** (sem restrição de formato); validação alinhada ao banco (relaxados os *checks* `bookmarked_page`/`last_page_read` para `>= 0`, 0-based do EPUB — corrige de passagem a 1ª página do #22); E2E contra o banco de dev |
+| #27 | RF22 / RN07 — Criação de grifo (só EPUB) | `POST`/`GET /api/reading/{id}/highlights` autenticado; grava em `highlight` (`excerpt`, `epub_position`=*CFI*, `color`); nova coluna `color` (migração) para persistir a cor do front; não-EPUB → 422 `PUBLICATION_NOT_EPUB`; E2E contra o banco de dev; integração do front verificada no navegador |
+| #28 | RF23 / RN07 — Criação de anotação (só EPUB) | `POST`/`GET /api/reading/{id}/annotations` autenticado; grava em `annotation` (`linked_excerpt`, `content`, `epub_position`); recurso independente do grifo; não-EPUB → 422; sem migração; E2E contra o banco de dev; integração do front verificada no navegador |
+| #29 | RF24 — Listagem de grifos/anotações | `GET /api/reading/{id}/highlights-annotations` autenticado → `{ highlights, annotations }` num único *snapshot* de reabertura; listas vazias (não erro) quando não há nada; reusa as listagens das #27/#28; sem migração; E2E contra o banco de dev |
+| #30 | RF07 — Consulta ao dicionário | `POST /api/dictionary/lookup { word, publicationId }` autenticado → `{ word, phonetic?, meanings }`; **fonte externa** (cliente HTTP dedicado) com idioma derivado da publicação (*fallback* inglês); registra só o **evento** em `word_lookup` e **apenas quando `users.save_dictionary = true`** (RF26); sem verbete → 404 `WORD_NOT_FOUND`, falha na fonte → 502 `DICTIONARY_UNAVAILABLE`; sem migração; E2E contra o banco de dev |
 
 Na listagem, `relevance` utiliza popularidade como critério inicial. A rota
 `/api/publications/search` é um alias público de `/api/publications`, com o
