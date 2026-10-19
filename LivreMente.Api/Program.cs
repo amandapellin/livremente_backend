@@ -69,6 +69,14 @@ builder.Services.AddHttpClient("dictionary", c =>
     c.BaseAddress = new Uri(builder.Configuration["Dictionary:BaseUrl"] ?? "https://api.dictionaryapi.dev/");
     c.Timeout = TimeSpan.FromSeconds(10);
 });
+// Fallback do dicionário (RF07): Wiktionary REST da Wikimedia, usada quando a
+// fonte primária está indisponível. A Wikimedia pede um User-Agent identificável.
+builder.Services.AddHttpClient("dictionary-fallback", c =>
+{
+    c.BaseAddress = new Uri(builder.Configuration["Dictionary:FallbackBaseUrl"] ?? "https://en.wiktionary.org/");
+    c.Timeout = TimeSpan.FromSeconds(10);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("LivreMente/1.0 (https://github.com/amandapellin/livremente_backend)");
+});
 builder.Services.AddMemoryCache(o => o.SizeLimit = 256L * 1024 * 1024); // cache dos arquivos de leitura (bytes), limite ~256 MB
 builder.Services.AddHostedService<PopularBooksCacheWarmer>(); // pré-aquece o cache dos livros populares no startup
 builder.Services.ConfigureHttpJsonOptions(o =>
