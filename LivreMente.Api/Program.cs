@@ -61,6 +61,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPreferenceService, PreferenceService>();
 builder.Services.AddScoped<IPublicationService, PublicationService>();
 builder.Services.AddScoped<IReadingService, ReadingService>();
+builder.Services.AddScoped<IShelfService, ShelfService>();
 builder.Services.AddScoped<IDictionaryService, DictionaryService>();
 builder.Services.AddHttpClient(); // proxy dos arquivos de leitura (EPUB/PDF)
 // Dicionário (RF07): fonte externa. BaseAddress configurável (Dictionary:BaseUrl).
@@ -145,6 +146,7 @@ app.MapUserEndpoints();
 app.MapPublicationEndpoints();
 app.MapReadingEndpoints();
 app.MapDictionaryEndpoints();
+app.MapShelfEndpoints();
 
 app.Run();
 
