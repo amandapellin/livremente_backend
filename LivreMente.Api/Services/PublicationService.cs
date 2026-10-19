@@ -11,17 +11,6 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
 {
     private readonly LivreMenteDbContext _db = db;
 
-    // Um nome da fonte pode corresponder a mais de um slug do front.
-    private static readonly ILookup<string, string> BookGenreSlugs =
-        PreferenceCatalog.BookGenres
-            .SelectMany(entry => entry.Value.Select(name => (Name: name, Slug: entry.Key)))
-            .ToLookup(entry => entry.Name, entry => entry.Slug, StringComparer.Ordinal);
-
-    private static readonly ILookup<string, string> ArticleAreaSlugs =
-        PreferenceCatalog.ArticleArchives
-            .SelectMany(entry => entry.Value.Select(archive => (Archive: archive, Slug: entry.Key)))
-            .ToLookup(entry => entry.Archive, entry => entry.Slug, StringComparer.Ordinal);
-
     public async Task<CatalogPage> ListAsync(
         string? q = null,
         CatalogFilters? filters = null,
@@ -87,16 +76,14 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
             })
             .ToListAsync(ct);
 
-        // A tradução pelo catálogo ocorre em memória somente para a página consultada.
+        // A tradução pelo catálogo ocorre em memória somente para a página consultada
+        // (mapper compartilhado com a estante — #32).
         var items = rows.Select(p => new PublicationCardDto(
             p.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
             p.Title, p.Type.ToString(), p.Source.ToString(), p.Language, p.Year,
-            p.Type == PublicationType.scientific_article ? null : p.CoverUrl,
+            PublicationCardMapper.CoverFor(p.Type, p.CoverUrl),
             p.Authors,
-            (p.Type == PublicationType.book
-                ? p.Genres.SelectMany(name => BookGenreSlugs[name])
-                : ArticleAreaSlugs[PreferenceCatalog.ArchiveOf(p.KnowledgeArea ?? "")])
-                .Distinct().OrderBy(slug => slug).ToList()))
+            PublicationCardMapper.GenreSlugs(p.Type, p.Genres, p.KnowledgeArea)))
             .ToList();
 
         return new CatalogPage(items, page, pageSize, total, totalPages, counts);
@@ -127,7 +114,7 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
         return publications;
     }
 
-    public async Task<PublicationDetailsDto?> GetByIdAsync(int id, CancellationToken ct = default)
+    public async Task<PublicationDetailsDto?> GetByIdAsync(int id, int? userId = null, CancellationToken ct = default)
     {
         var p = await _db.Publications.AsNoTracking()
             .Where(x => x.Id == id)
@@ -143,21 +130,37 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
         if (p is null)
             return null;
 
-        // Mesma tradução nome→slug do card (livro via BookGenres; artigo via área).
-        var genreSlugs = (p.Type == PublicationType.book
-                ? p.Genres.SelectMany(name => BookGenreSlugs[name])
-                : ArticleAreaSlugs[PreferenceCatalog.ArchiveOf(p.KnowledgeArea ?? "")])
-            .Distinct().OrderBy(slug => slug).ToList();
+        // Mesma tradução nome→slug do card (mapper compartilhado).
+        var genreSlugs = PublicationCardMapper.GenreSlugs(p.Type, p.Genres, p.KnowledgeArea);
+
+        // #20 ciente do usuário: se há JWT (userId) e a obra está na estante, traz o
+        // estado + progresso (habilita o selo "Na estante · {estado}" e o "Ler agora"
+        // que não rebaixa "lido"). Anônimo ou fora da estante → nulos.
+        ReadingStatus? readingStatus = null;
+        int? readingProgress = null;
+        if (userId is int uid)
+        {
+            var onShelf = await _db.Shelves.AsNoTracking()
+                .Where(s => s.UserId == uid && s.PublicationId == id)
+                .Select(s => new { s.Status, s.ReadPercentage })
+                .FirstOrDefaultAsync(ct);
+            if (onShelf is not null)
+            {
+                readingStatus = onShelf.Status;
+                readingProgress = onShelf.ReadPercentage;
+            }
+        }
 
         return new PublicationDetailsDto(
             p.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
             p.Title, p.Type.ToString(), p.Source.ToString(), p.Language, p.Year,
             p.Summary,
-            p.Type == PublicationType.scientific_article ? null : p.CoverUrl,
+            PublicationCardMapper.CoverFor(p.Type, p.CoverUrl),
             p.Authors, genreSlugs,
             !p.CopyrightFlag,
             p.EpubFileUrl, p.PdfFileUrl,
-            p.EpubFileUrl ?? p.PdfFileUrl);
+            p.EpubFileUrl ?? p.PdfFileUrl,
+            readingStatus, readingProgress);
     }
 
     private static IQueryable<Publication> ApplySearch(IQueryable<Publication> publications, string text)

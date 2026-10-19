@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using LivreMente.Api.Dtos;
+using LivreMente.Api.Security;
 using LivreMente.Api.Services;
 using LivreMente.Api.Validation;
 
@@ -50,9 +52,13 @@ public static class PublicationEndpoints
         .Produces<ErrorResponse>(StatusCodes.Status400BadRequest);
 
         // Detalhes de uma publicação (RF13, #20). Público; 404 se não existir.
-        group.MapGet("/{id:int}", async (int id, IPublicationService publications, CancellationToken ct) =>
+        // Ciente do usuário: a rota continua anônima, mas SE vier um JWT válido,
+        // o middleware popula o principal e o estado/progresso da estante entram na
+        // resposta (identidade do `sub`, RN04). Anônimo → campos de estante nulos.
+        group.MapGet("/{id:int}", async (
+            int id, ClaimsPrincipal principal, IPublicationService publications, CancellationToken ct) =>
         {
-            var details = await publications.GetByIdAsync(id, ct);
+            var details = await publications.GetByIdAsync(id, principal.GetUserId(), ct);
             return details is null ? Results.NotFound() : Results.Ok(details);
         })
         .AllowAnonymous()

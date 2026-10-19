@@ -13,6 +13,10 @@ public interface IPublicationService
         string? sort = null,
         CancellationToken ct = default);
 
-    /// <summary>Metadados completos de uma publicação (RF13). Null se não existir.</summary>
-    Task<PublicationDetailsDto?> GetByIdAsync(int id, CancellationToken ct = default);
+    /// <summary>
+    /// Metadados completos de uma publicação (RF13). Null se não existir.
+    /// Com <paramref name="userId"/> (JWT presente, #20), popula o estado/progresso
+    /// da estante do usuário para a obra; sem ele (anônimo), vêm nulos.
+    /// </summary>
+    Task<PublicationDetailsDto?> GetByIdAsync(int id, int? userId = null, CancellationToken ct = default);
 }
