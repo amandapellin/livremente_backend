@@ -30,4 +30,5 @@ public record PublicationDetailsDto(
     string? PdfFileUrl,
     string? DownloadUrl,
     ReadingStatus? ReadingStatus = null,
-    int? ReadingProgress = null);
+    int? ReadingProgress = null,
+    int? ReadingTimeMinutes = null);

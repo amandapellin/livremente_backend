@@ -138,6 +138,7 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
         // que não rebaixa "lido"). Anônimo ou fora da estante → nulos.
         ReadingStatus? readingStatus = null;
         int? readingProgress = null;
+        int? readingTimeMinutes = null;
         if (userId is int uid)
         {
             var onShelf = await _db.Shelves.AsNoTracking()
@@ -149,6 +150,13 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
                 readingStatus = onShelf.Status;
                 readingProgress = onShelf.ReadPercentage;
             }
+
+            // Tempo total de leitura ATIVA (RF20): soma o active_seconds das sessões
+            // da obra. Em minutos (mínimo 1 min se houve leitura; null se nenhuma).
+            var totalSeconds = await _db.ReadingSessions.AsNoTracking()
+                .Where(s => s.UserId == uid && s.PublicationId == id)
+                .SumAsync(s => (int?)s.ActiveSeconds, ct) ?? 0;
+            readingTimeMinutes = totalSeconds > 0 ? Math.Max(1, (int)Math.Round(totalSeconds / 60.0)) : null;
         }
 
         return new PublicationDetailsDto(
@@ -160,7 +168,7 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
             !p.CopyrightFlag,
             p.EpubFileUrl, p.PdfFileUrl,
             p.EpubFileUrl ?? p.PdfFileUrl,
-            readingStatus, readingProgress);
+            readingStatus, readingProgress, readingTimeMinutes);
     }
 
     private static IQueryable<Publication> ApplySearch(IQueryable<Publication> publications, string text)
