@@ -407,6 +407,9 @@ public partial class LivreMenteDbContext : DbContext
             entity.Property(e => e.Word)
                 .HasMaxLength(100)
                 .HasColumnName("word");
+            entity.Property(e => e.Definition)
+                .HasMaxLength(500)
+                .HasColumnName("definition");
 
             entity.HasOne(d => d.Publication).WithMany(p => p.WordLookups)
                 .HasForeignKey(d => d.PublicationId)
