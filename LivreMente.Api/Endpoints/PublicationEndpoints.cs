@@ -65,6 +65,24 @@ public static class PublicationEndpoints
         .Produces<PublicationDetailsDto>(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status404NotFound);
 
+        // Proxy da capa (RF14, #27): busca a imagem no servidor (sem CORS) e serve
+        // na mesma origem, para a estante amostrar a cor dominante da lombada no
+        // canvas. Público (o acervo é público); 404 sem capa/obra, 502 na fonte.
+        group.MapGet("/{id:int}/cover", async (
+            int id, IReadingService reading, CancellationToken ct) =>
+        {
+            var result = await reading.GetCoverAsync(id, ct);
+            return result.Status switch
+            {
+                GetFileStatus.Ok => Results.File(result.Content!, result.ContentType!),
+                GetFileStatus.PublicationNotFound or GetFileStatus.NotAvailable => Results.NotFound(),
+                _ => Results.StatusCode(StatusCodes.Status502BadGateway),
+            };
+        })
+        .AllowAnonymous()
+        .Produces(StatusCodes.Status200OK, contentType: "image/jpeg")
+        .Produces(StatusCodes.Status404NotFound);
+
         return group;
     }
 
