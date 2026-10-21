@@ -63,7 +63,22 @@ public class DictionaryService(
             .FirstOrDefaultAsync(ct);
         if (save)
         {
-            _db.WordLookups.Add(new WordLookup { UserId = userId, PublicationId = publicationId, Word = word });
+            // Guarda a 1ª acepção (RF08, #27) para o card do histórico; trunca ao
+            // limite da coluna (varchar(500)).
+            var definition = entry.Meanings
+                .SelectMany(m => m.Definitions)
+                .Select(d => d.Definition)
+                .FirstOrDefault(d => !string.IsNullOrWhiteSpace(d));
+            if (definition is { Length: > 500 })
+                definition = definition[..500];
+
+            _db.WordLookups.Add(new WordLookup
+            {
+                UserId = userId,
+                PublicationId = publicationId,
+                Word = word,
+                Definition = definition,
+            });
             await _db.SaveChangesAsync(ct); // consult_date tem default no banco
         }
 
@@ -81,7 +96,7 @@ public class DictionaryService(
             : query.OrderBy(w => w.ConsultDate).ThenBy(w => w.Id);
 
         return await query
-            .Select(w => new WordLookupHistoryDto(w.Word, w.ConsultDate, w.PublicationId, w.Publication.Title))
+            .Select(w => new WordLookupHistoryDto(w.Word, w.ConsultDate, w.PublicationId, w.Publication.Title, w.Definition))
             .ToListAsync(ct);
     }
 

@@ -297,6 +297,51 @@ public class ReadingService(
         }
     }
 
+    public async Task<PublicationFileResult> GetCoverAsync(int publicationId, CancellationToken ct = default)
+    {
+        // Projeta num tipo anônimo para distinguir "obra não existe" de "obra sem capa"
+        // (um Select direto de string? devolveria null nos dois casos).
+        var row = await _db.Publications.AsNoTracking()
+            .Where(p => p.Id == publicationId)
+            .Select(p => new { p.CoverUrl })
+            .FirstOrDefaultAsync(ct);
+
+        if (row is null)
+            return new PublicationFileResult(GetFileStatus.PublicationNotFound, null, null);
+        if (string.IsNullOrEmpty(row.CoverUrl))
+            return new PublicationFileResult(GetFileStatus.NotAvailable, null, null);
+
+        // As capas do Gutendex são JPEG (pg*.cover.medium.jpg).
+        const string contentType = "image/jpeg";
+        var cacheKey = $"pubcover:{publicationId}";
+        if (_cache.TryGetValue(cacheKey, out byte[]? cached) && cached is not null)
+            return new PublicationFileResult(GetFileStatus.Ok, cached, contentType);
+
+        // Single-flight + cache, mesmo padrão do proxy de EPUB/PDF.
+        var gate = FileGates.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            if (_cache.TryGetValue(cacheKey, out cached) && cached is not null)
+                return new PublicationFileResult(GetFileStatus.Ok, cached, contentType);
+
+            var bytes = await DownloadWithRetryAsync(row.CoverUrl, ct);
+            if (bytes is null)
+                return new PublicationFileResult(GetFileStatus.UpstreamError, null, null);
+
+            _cache.Set(cacheKey, bytes, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(30),
+                Size = bytes.Length,
+            });
+            return new PublicationFileResult(GetFileStatus.Ok, bytes, contentType);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     private bool PreferNoImagesEpub() =>
         _configuration.GetValue<bool?>("Reading:PreferNoImagesEpub") ?? true;
 

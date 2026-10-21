@@ -136,7 +136,8 @@ public class UserService(LivreMenteDbContext db, IPasswordHasher passwordHasher)
     }
 
     private static UserProfileDto ToProfile(User user, bool hasAvatar) =>
-        new(user.Id.ToString(), user.FullName, user.Email, hasAvatar ? $"/api/users/{user.Id}/avatar" : null);
+        new(user.Id.ToString(), user.FullName, user.Email, hasAvatar ? $"/api/users/{user.Id}/avatar" : null,
+            user.Gender.ToString(), user.BirthDate);
 
     // lgpdConsent é verdadeiro enquanto a conta existir (RN03); consentedAt é a data do aceite.
     private static UserConsentDto ToConsent(User user) =>

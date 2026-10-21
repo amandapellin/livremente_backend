@@ -13,6 +13,9 @@ public partial class WordLookup
 
     public string Word { get; set; } = null!;
 
+    /// <summary>Definição consultada (1ª acepção), para o histórico (#27). Pode ser nula.</summary>
+    public string? Definition { get; set; }
+
     public DateTime ConsultDate { get; set; }
 
     public virtual Publication Publication { get; set; } = null!;

@@ -113,4 +113,11 @@ public interface IReadingService
     /// bytes, para o front consumi-lo pela mesma origem (sem CORS). RF15/RF16.
     /// </summary>
     Task<PublicationFileResult> GetFileAsync(int publicationId, PublicationFileKind kind, CancellationToken ct = default);
+
+    /// <summary>
+    /// Baixa, no servidor, a capa da publicação (URL do Gutendex) e a devolve em
+    /// bytes, para o front consumi-la pela mesma origem (sem CORS) e amostrar a cor
+    /// dominante da lombada na estante (#27). `NotAvailable` quando a obra não tem capa.
+    /// </summary>
+    Task<PublicationFileResult> GetCoverAsync(int publicationId, CancellationToken ct = default);
 }
