@@ -24,7 +24,8 @@ public class ShelfService(LivreMenteDbContext db) : IShelfService
             query = query.Where(s => s.Status == st);
 
         // Join estante → publicação reaproveitando a mesma projeção do card do
-        // catálogo (ordena por título, desempate por id — estável).
+        // catálogo (ordena por título, desempate por id — estável). Projeta também
+        // as URLs de arquivo para derivar o formato (EPUB/PDF) do card da Lista (#27).
         var rows = await query
             .OrderBy(s => s.Publication.Title)
             .ThenBy(s => s.Id)
@@ -41,21 +42,44 @@ public class ShelfService(LivreMenteDbContext db) : IShelfService
                 s.Publication.Year,
                 s.Publication.CoverUrl,
                 s.Publication.KnowledgeArea,
+                s.Publication.EpubFileUrl,
+                s.Publication.PdfFileUrl,
                 Authors = s.Publication.Authors.OrderBy(a => a.Name).Select(a => a.Name).ToList(),
                 Genres = s.Publication.Genres.Select(g => g.Name).ToList(),
             })
             .ToListAsync(ct);
 
-        // Tradução de slugs em memória, só para os itens da estante.
-        return rows.Select(r => new ShelfItemDto(
-            new PublicationCardDto(
-                r.Id.ToString(CultureInfo.InvariantCulture),
-                r.Title, r.Type.ToString(), r.Source.ToString(), r.Language, r.Year,
-                PublicationCardMapper.CoverFor(r.Type, r.CoverUrl),
-                r.Authors,
-                PublicationCardMapper.GenreSlugs(r.Type, r.Genres, r.KnowledgeArea)),
-            r.Status, r.ReadPercentage, r.LastPageRead))
-            .ToList();
+        // Tempo de leitura ATIVA por obra (RF20) para o card da Lista (#27): soma o
+        // `active_seconds` das sessões, agrupado por publicação, numa ÚNICA consulta
+        // (evita N+1). Mesma fórmula de minutos do #20 (PublicationService): mínimo de
+        // 1 min quando houve leitura; null quando nunca leu.
+        var pubIds = rows.Select(r => r.Id).ToList();
+        var secondsByPub = pubIds.Count == 0
+            ? new Dictionary<int, int>()
+            : await _db.ReadingSessions.AsNoTracking()
+                .Where(rs => rs.UserId == userId && pubIds.Contains(rs.PublicationId))
+                .GroupBy(rs => rs.PublicationId)
+                .Select(g => new { PublicationId = g.Key, Total = g.Sum(rs => (int?)rs.ActiveSeconds) ?? 0 })
+                .ToDictionaryAsync(x => x.PublicationId, x => x.Total, ct);
+
+        // Tradução de slugs + tempo/formato em memória, só para os itens da estante.
+        return rows.Select(r =>
+        {
+            var totalSeconds = secondsByPub.GetValueOrDefault(r.Id);
+            int? readingTimeMinutes = totalSeconds > 0 ? Math.Max(1, (int)Math.Round(totalSeconds / 60.0)) : null;
+            var format = r.EpubFileUrl is not null ? "epub" : r.PdfFileUrl is not null ? "pdf" : null;
+
+            return new ShelfItemDto(
+                new PublicationCardDto(
+                    r.Id.ToString(CultureInfo.InvariantCulture),
+                    r.Title, r.Type.ToString(), r.Source.ToString(), r.Language, r.Year,
+                    PublicationCardMapper.CoverFor(r.Type, r.CoverUrl),
+                    r.Authors,
+                    PublicationCardMapper.GenreSlugs(r.Type, r.Genres, r.KnowledgeArea)),
+                r.Status, r.ReadPercentage, r.LastPageRead,
+                readingTimeMinutes, format);
+        })
+        .ToList();
     }
 
     public async Task<bool> SetStatusAsync(
