@@ -342,6 +342,43 @@ public class ReadingService(
         }
     }
 
+    public async Task<ReadingCalendarDto> GetCalendarAsync(
+        int userId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        // Intervalo [from, to] inclusivo → meia-noite de `from` até meia-noite do dia
+        // seguinte a `to` (exclusivo). `start_time` é `timestamp without time zone`
+        // (gravado como UTC, Kind=Unspecified), então os limites também são
+        // Unspecified — o Npgsql recusaria Kind=Utc nessas colunas.
+        var start = from.ToDateTime(TimeOnly.MinValue);
+        var endExclusive = to.AddDays(1).ToDateTime(TimeOnly.MinValue);
+
+        // Agrupa por data do início da sessão; soma o tempo ativo e conta as sessões.
+        // Só dias com leitura ATIVA (HAVING soma > 0) — uma sessão aberta sem
+        // heartbeat (active_seconds = 0) não conta como frequência.
+        var rows = await _db.ReadingSessions.AsNoTracking()
+            .Where(s => s.UserId == userId && s.StartTime >= start && s.StartTime < endExclusive)
+            .GroupBy(s => s.StartTime.Date)
+            .Select(g => new
+            {
+                Date = g.Key,
+                ActiveSeconds = g.Sum(s => s.ActiveSeconds),
+                SessionCount = g.Count(),
+            })
+            .Where(x => x.ActiveSeconds > 0)
+            .ToListAsync(ct);
+
+        // Minutos com a mesma regra do #20 (mínimo 1 min quando houve leitura).
+        var days = rows
+            .OrderBy(x => x.Date)
+            .Select(x => new ReadingCalendarDayDto(
+                DateOnly.FromDateTime(x.Date),
+                Math.Max(1, (int)Math.Round(x.ActiveSeconds / 60.0)),
+                x.SessionCount))
+            .ToList();
+
+        return new ReadingCalendarDto(from, to, days);
+    }
+
     private bool PreferNoImagesEpub() =>
         _configuration.GetValue<bool?>("Reading:PreferNoImagesEpub") ?? true;
 

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using LivreMente.Api.Dtos;
 using LivreMente.Api.Security;
 using LivreMente.Api.Services;
+using LivreMente.Api.Validation;
 
 namespace LivreMente.Api.Endpoints;
 
@@ -20,6 +21,28 @@ public static class ReadingEndpoints
     public static RouteGroupBuilder MapReadingEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/reading").WithTags("Reading").RequireAuthorization();
+
+        // RF09 (#35): calendário de frequência de leitura do usuário. Recurso de
+        // usuário (não por publicação); `from`/`to` (yyyy-MM-dd) são opcionais —
+        // sem ambos, usa o mês atual. A rota literal "/calendar" não colide com
+        // "/{publicationId:int}/..." (constraint int). Identidade do JWT (RN04).
+        group.MapGet("/calendar", async (
+            ClaimsPrincipal principal, IReadingService reading, CancellationToken ct,
+            string? from = null, string? to = null) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            var (error, rangeFrom, rangeTo) = ReadingCalendarValidation.Resolve(from, to);
+            if (error is not null)
+                return Results.BadRequest(new ErrorResponse(error, "VALIDATION_ERROR"));
+
+            var calendar = await reading.GetCalendarAsync(userId.Value, rangeFrom, rangeTo, ct);
+            return Results.Ok(calendar);
+        })
+        .Produces<ReadingCalendarDto>(StatusCodes.Status200OK)
+        .Produces<ErrorResponse>(StatusCodes.Status400BadRequest);
 
         // RF17/RN08: salvamento automático da última página lida (EPUB).
         group.MapPut("/{publicationId:int}/last-page", async (
