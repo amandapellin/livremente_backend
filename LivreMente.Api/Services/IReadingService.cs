@@ -120,4 +120,12 @@ public interface IReadingService
     /// dominante da lombada na estante (#27). `NotAvailable` quando a obra não tem capa.
     /// </summary>
     Task<PublicationFileResult> GetCoverAsync(int publicationId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Calendário de frequência de leitura (RF09, #35): agrega as sessões do usuário
+    /// (`reading_session`) por dia do início (`start_time`) dentro de [from, to] e
+    /// devolve, por dia COM leitura ativa, os minutos de tela ativa e o nº de sessões.
+    /// Lista esparsa (dias sem atividade ficam de fora; o front preenche o grid).
+    /// </summary>
+    Task<Dtos.ReadingCalendarDto> GetCalendarAsync(int userId, DateOnly from, DateOnly to, CancellationToken ct = default);
 }
