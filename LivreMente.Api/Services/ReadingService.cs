@@ -379,6 +379,56 @@ public class ReadingService(
         return new ReadingCalendarDto(from, to, days);
     }
 
+    public async Task<ReadingStatsDto> GetStatsAsync(int userId, CancellationToken ct = default)
+    {
+        // Tempo ativo por dia (UTC) do usuário; só dias com leitura (SUM > 0).
+        var rows = await _db.ReadingSessions.AsNoTracking()
+            .Where(s => s.UserId == userId)
+            .GroupBy(s => s.StartTime.Date)
+            .Select(g => new { Day = g.Key, Seconds = g.Sum(x => (long)x.ActiveSeconds) })
+            .Where(x => x.Seconds > 0)
+            .ToListAsync(ct);
+
+        if (rows.Count == 0)
+            return new ReadingStatsDto(0, 0, 0, 0, 0, 0, 0);
+
+        static int ToMinutes(long seconds) => seconds > 0 ? Math.Max(1, (int)Math.Round(seconds / 60.0)) : 0;
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var totalSeconds = rows.Sum(r => r.Seconds);
+        var todaySeconds = rows.Where(r => DateOnly.FromDateTime(r.Day) == today).Sum(r => r.Seconds);
+        var activeDays = rows.Count;
+        var daysThisMonth = rows.Count(r => r.Day.Year == today.Year && r.Day.Month == today.Month);
+
+        // Dias (ordenados) para calcular as sequências.
+        var days = rows.Select(r => DateOnly.FromDateTime(r.Day)).OrderBy(d => d).ToList();
+        var daySet = days.ToHashSet();
+
+        // Maior sequência: maior corrida de dias consecutivos.
+        int longest = 0, run = 0;
+        DateOnly? prev = null;
+        foreach (var d in days)
+        {
+            run = prev is DateOnly p && d.DayNumber == p.DayNumber + 1 ? run + 1 : 1;
+            if (run > longest) longest = run;
+            prev = d;
+        }
+
+        // Sequência atual: ancorada em hoje (ou ontem, para não zerar antes de ler hoje).
+        var current = 0;
+        var last = days[^1];
+        if (last == today || last == today.AddDays(-1))
+            for (var d = last; daySet.Contains(d); d = d.AddDays(-1))
+                current++;
+
+        var totalMinutes = ToMinutes(totalSeconds);
+        var dailyAverage = activeDays > 0 ? (int)Math.Round((double)totalMinutes / activeDays) : 0;
+
+        return new ReadingStatsDto(
+            totalMinutes, ToMinutes(todaySeconds), dailyAverage,
+            current, longest, activeDays, daysThisMonth);
+    }
+
     private bool PreferNoImagesEpub() =>
         _configuration.GetValue<bool?>("Reading:PreferNoImagesEpub") ?? true;
 

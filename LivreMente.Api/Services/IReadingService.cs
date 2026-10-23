@@ -128,4 +128,11 @@ public interface IReadingService
     /// Lista esparsa (dias sem atividade ficam de fora; o front preenche o grid).
     /// </summary>
     Task<Dtos.ReadingCalendarDto> GetCalendarAsync(int userId, DateOnly from, DateOnly to, CancellationToken ct = default);
+
+    /// <summary>
+    /// Métricas agregadas de leitura do usuário (RF27, #37): tempo total/hoje/média
+    /// diária, sequência atual e recorde (streak) e dias de leitura — tudo a partir
+    /// da <c>reading_session</c>. Zeros quando não há leitura.
+    /// </summary>
+    Task<Dtos.ReadingStatsDto> GetStatsAsync(int userId, CancellationToken ct = default);
 }
