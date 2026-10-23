@@ -13,7 +13,8 @@ public static class RecommendationEndpoints
     {
         var group = app.MapGroup("/api/recommendations").WithTags("Recommendations").RequireAuthorization();
 
-        // RF27 (#36): recomendações personalizadas do usuário (preferências + histórico).
+        // RF27 (#37, endpoint de listagem): lista as recomendações do usuário autenticado,
+        // delegando ao serviço da #36. Itens no mesmo card do catálogo (RF14), com `limit`.
         group.MapGet("", async (
             ClaimsPrincipal principal, IRecommendationService recommendations, CancellationToken ct,
             int limit = 12) =>
@@ -29,6 +30,11 @@ public static class RecommendationEndpoints
             var result = await recommendations.GetRecommendationsAsync(userId.Value, limit, ct);
             return Results.Ok(result);
         })
+        .WithSummary("Lista as recomendações personalizadas do usuário autenticado (RF27).")
+        .WithDescription(
+            $"Retorna até `limit` itens (1–{MaxLimit}, padrão 12) no mesmo card resumido do catálogo " +
+            "(RF14), para reuso no front. `coldStart = true` quando a pessoa não tem perfil (lista por " +
+            "popularidade). Obras já na estante são excluídas.")
         .Produces<RecommendationsDto>(StatusCodes.Status200OK)
         .Produces<ErrorResponse>(StatusCodes.Status400BadRequest);
 
