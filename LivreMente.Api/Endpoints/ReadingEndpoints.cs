@@ -44,6 +44,20 @@ public static class ReadingEndpoints
         .Produces<ReadingCalendarDto>(StatusCodes.Status200OK)
         .Produces<ErrorResponse>(StatusCodes.Status400BadRequest);
 
+        // RF27 (#37): métricas agregadas de leitura do usuário (cards de estatística
+        // da tela de recomendações). Identidade do JWT (RN04); sem parâmetros.
+        group.MapGet("/stats", async (
+            ClaimsPrincipal principal, IReadingService reading, CancellationToken ct) =>
+        {
+            var userId = principal.GetUserId();
+            if (userId is null)
+                return Results.Unauthorized();
+
+            return Results.Ok(await reading.GetStatsAsync(userId.Value, ct));
+        })
+        .WithSummary("Métricas agregadas de leitura do usuário (tempo, sequência, dias).")
+        .Produces<ReadingStatsDto>(StatusCodes.Status200OK);
+
         // RF17/RN08: salvamento automático da última página lida (EPUB).
         group.MapPut("/{publicationId:int}/last-page", async (
             int publicationId, SaveLastPageRequest req, ClaimsPrincipal principal,

@@ -171,7 +171,14 @@ repetidamente arquivos grandes — e contornar a limitação de banda das fontes
 o proxy mantém um **cache em memória** com *single-flight* (uma única busca na
 origem ainda que haja requisições concorrentes) e, para livros, prefere a
 **variante do EPUB sem imagens** (substancialmente menor); um serviço de segundo
-plano **pré-aquece** o cache dos livros mais populares na inicialização.
+plano **pré-aquece** o cache dos livros mais populares na inicialização. Por
+decisão de segurança posterior, os *endpoints* de arquivo passaram a **exigir
+autenticação**: como o leitor de EPUB e o quadro (*iframe*) de PDF não enviam o
+cabeçalho de autorização, o front obtém o arquivo por requisição autenticada e o
+entrega ao leitor por uma URL local (*blob*) de mesma origem. A mesma
+infraestrutura de *proxy* com cache serve também as **capas** do acervo,
+permitindo que a interface as processe na mesma origem (por exemplo, para extrair
+a cor predominante da capa na visualização em prateleira).
 
 O progresso de leitura (última página, percentual e marcação manual de página) e
 as **sessões de leitura** (tempo de tela ativa) são persistidos por usuário.
@@ -189,7 +196,55 @@ publicação** em leitura (e recuo para o inglês quando o idioma não é suport
 Apenas o **evento de consulta** é persistido (a palavra e a obra, não o
 significado) e somente quando o leitor consente, por meio de um ajuste de
 preferência (*toggle* de histórico) — concretizando, na prática, o controle do
-usuário sobre os próprios dados.
+usuário sobre os próprios dados. Por depender de uma fonte gratuita e
+intermitente, a consulta foi tornada **resiliente**: falhas transitórias são
+repetidas com recuo progressivo e, quando a fonte primária fica indisponível, o
+sistema recorre a uma **fonte alternativa** (Wiktionary), normalizando ambas ao
+mesmo formato de resposta.
+
+A **estante** do usuário materializa o relacionamento entre leitor e obra,
+registrando o estado de leitura (quero ler, lendo, lido, abandonado) e o
+progresso; as alterações de estado também empregam a **inserção atômica com
+resolução de conflito**, de modo a preservar o progresso já acumulado. A partir
+das sessões de leitura, o sistema deriva as **métricas** apresentadas ao
+usuário — tempo total e por período, sequência de dias consecutivos de leitura
+e um **calendário de frequência** —, obtidas por **agregações** no banco
+(agrupamento por dia e por publicação) calculadas em uma única consulta, de modo
+a evitar o problema de múltiplas consultas em laço (*N+1*).
+
+### 3.1.12 Sistema de recomendação personalizada (aprendizado de máquina)
+
+A recomendação de obras (RF27) foi implementada como **filtragem baseada em
+conteúdo** (*content-based*) com **aprendizado de máquina**. Avaliou-se, como
+alternativa, a **filtragem colaborativa** (abordagem popularizada por serviços de
+*streaming*), descartada por depender de um grande volume de interações entre
+usuários — inviável em uma plataforma nova, situação conhecida como *cold start*
+de sistema; a abordagem colaborativa (por fatoração de matrizes) fica registrada
+como trabalho futuro.
+
+Para a vetorização dos textos adotou-se a biblioteca **ML.NET**. Cada obra é
+representada por um **vetor TF-IDF** (frequência do termo ponderada pela
+frequência inversa nos documentos) construído a partir de seu texto descritivo
+(título, sinopse, gêneros e área), com uso de bigramas e normalização L2. Esses
+vetores, mantidos de forma **esparsa em memória**, são calculados na
+inicialização por um serviço de segundo plano, de modo a não onerar as
+requisições.
+
+O "vetor de gosto" do usuário é o **centroide** (normalizado) dos vetores das
+obras de seu **histórico** (lidas e em leitura), somado a um **pseudo-documento**
+de suas **preferências declaradas** (gêneros e áreas) vetorizado no mesmo
+espaço — combinando, assim, comportamento observado e preferências explícitas. Os
+candidatos (obras fora da estante) são ordenados pela **similaridade de cosseno**
+com esse vetor (equivalente ao produto interno dos vetores normalizados); quando
+não há perfil suficiente, ou enquanto o índice ainda é construído, a lista recai
+sobre a **popularidade** do acervo (*cold start* de usuário).
+
+Como o acervo contém **múltiplas edições e traduções** de uma mesma obra, a
+recomendação **deduplica por obra**: além de excluir o que já está na estante,
+descarta edições repetidas por uma chave de obra (título e autor normalizados) e,
+para edições em **outro idioma** (de título distinto), identifica-as pela **alta
+similaridade de conteúdo** entre obras de um mesmo autor — evitando recomendar à
+pessoa aquilo que, na prática, ela já conhece.
 
 ---
 
@@ -223,13 +278,22 @@ tecnologias empregadas.*
 | #23 | RF18 — Retomada de leitura | `GET /api/reading/{id}/last-page` autenticado → `{ lastPageRead: int\|null }`; `GetLastPageAsync` lê `shelf` do par usuário/publicação; null se nunca leu; E2E contra o banco de dev |
 | #24 | RF19 — Percentual lido | `PUT /api/reading/{id}/percentage` autenticado; `SavePercentageAsync` valida EPUB e faz upsert atômico em `shelf.read_percentage`; valor 0–100 (senão 400); não-EPUB 422; E2E contra o banco de dev |
 | #25 | RF20 — Tempo de sessão | Modelado na `reading_session` (histórico por sessão); coluna `active_seconds` (tempo ativo); `POST /api/reading/{id}/session` abre a sessão → `{ sessionId }`; `PUT /api/reading/sessions/{id} { activeSeconds }` é heartbeat/encerramento (grava `active_seconds`, move `end_time`); EPUB e PDF; RN04 (só a própria sessão); E2E contra o banco de dev |
-| — | RF15 / RF16 — Proxy dos arquivos de leitura | `GET /api/reading/{id}/epub` e `/pdf` **públicos**; busca no servidor via `IHttpClientFactory` (sem CORS, com repetição) e transmite pela mesma origem; **cache em memória + *single-flight*** (`IMemoryCache`, `SemaphoreSlim`), **EPUB sem imagens** (variante menor, com *fallback*) e **pré-aquecimento** dos populares no *startup* (`BackgroundService`); 404/502 `UPSTREAM_ERROR`; verificado no navegador |
+| — | RF15 / RF16 — Proxy dos arquivos de leitura | `GET /api/reading/{id}/epub` e `/pdf` (posteriormente tornados **autenticados**, ver linha de segurança); busca no servidor via `IHttpClientFactory` (sem CORS, com repetição) e transmite pela mesma origem; **cache em memória + *single-flight*** (`IMemoryCache`, `SemaphoreSlim`), **EPUB sem imagens** (variante menor, com *fallback*) e **pré-aquecimento** dos populares no *startup* (`BackgroundService`); 404/502 `UPSTREAM_ERROR`; verificado no navegador |
 | #26 | RF21 — Marcação manual de página | `PUT`/`GET /api/reading/{id}/bookmark` autenticado; upsert atômico em `shelf.bookmarked_page`; **EPUB e PDF** (sem restrição de formato); validação alinhada ao banco (relaxados os *checks* `bookmarked_page`/`last_page_read` para `>= 0`, 0-based do EPUB — corrige de passagem a 1ª página do #22); E2E contra o banco de dev |
 | #27 | RF22 / RN07 — Criação de grifo (só EPUB) | `POST`/`GET /api/reading/{id}/highlights` autenticado; grava em `highlight` (`excerpt`, `epub_position`=*CFI*, `color`); nova coluna `color` (migração) para persistir a cor do front; não-EPUB → 422 `PUBLICATION_NOT_EPUB`; E2E contra o banco de dev; integração do front verificada no navegador |
 | #28 | RF23 / RN07 — Criação de anotação (só EPUB) | `POST`/`GET /api/reading/{id}/annotations` autenticado; grava em `annotation` (`linked_excerpt`, `content`, `epub_position`); recurso independente do grifo; não-EPUB → 422; sem migração; E2E contra o banco de dev; integração do front verificada no navegador |
 | #29 | RF24 — Listagem de grifos/anotações | `GET /api/reading/{id}/highlights-annotations` autenticado → `{ highlights, annotations }` num único *snapshot* de reabertura; listas vazias (não erro) quando não há nada; reusa as listagens das #27/#28; sem migração; E2E contra o banco de dev |
 | #30 | RF07 — Consulta ao dicionário | `POST /api/dictionary/lookup { word, publicationId }` autenticado → `{ word, phonetic?, meanings }`; **fonte externa** (cliente HTTP dedicado) com idioma derivado da publicação (*fallback* inglês); registra só o **evento** em `word_lookup` e **apenas quando `users.save_dictionary = true`** (RF26); sem verbete → 404 `WORD_NOT_FOUND`, falha na fonte → 502 `DICTIONARY_UNAVAILABLE`; sem migração; E2E contra o banco de dev |
 | #31 | RF08 — Histórico de palavras consultadas | `GET /api/dictionary/history?order=recent\|oldest` autenticado → lista `{ word, consultedAt, publicationId, publicationTitle }`; uma entrada por consulta, com a **obra de origem** (join `word_lookup`→`publication`); ordenação por data de consulta; RN04 (só o próprio usuário); lista vazia (não erro) quando não há histórico; sem migração; E2E contra o banco de dev |
+| #34 | RF08 — Histórico no perfil e definição | `word_lookup` ganha a coluna `definition` (grava a 1ª acepção, respeitando o *toggle* de histórico) exposta no `GET /api/dictionary/history`; seção de histórico também na tela de perfil; migração em `docs/sql` |
+| — | Resiliência — consulta ao dicionário | Repetição com recuo em falhas transitórias e *fallback* para fonte alternativa (Wiktionary) quando a fonte primária fica indisponível; ambas normalizadas ao mesmo DTO |
+| #32 / #33 | RF05 / RF06 / RN05 — Estante do usuário | `GET /api/shelf` (listagem por estado), `PUT /api/shelf/{id}` (define o estado por **upsert atômico** que preserva o progresso), `DELETE /api/shelf/{id}`; reuso do card do catálogo (`PublicationCardMapper`); enum `reading_status_enum` exposto como texto; sem migração; E2E contra o banco de dev |
+| #20 (ext.) | RF13 — Detalhes cientes do usuário | `GET /api/publications/{id}` segue público, mas lê o JWT quando presente e popula estado/progresso/tempo de leitura a partir da estante; `readingTimeMinutes` agrega `reading_session.active_seconds` em minutos |
+| — | Estante — enriquecimento e proxy de capa | `ShelfItemDto` ganha tempo de leitura (agregado por `GROUP BY`, sem *N+1*) e formato (epub/pdf); `GET /api/publications/{id}/cover` público reusa o *proxy* com cache + *single-flight* para servir a capa na mesma origem |
+| — | Segurança — autenticação da leitura | Os *endpoints* de arquivo `epub`/`pdf` passaram a **exigir JWT** (antes públicos); o front obtém o arquivo por requisição autenticada e o entrega ao leitor por URL local (*blob*) de mesma origem; verificado no navegador |
+| #35 | RF09 — Calendário de frequência | `GET /api/reading/calendar?from&to` autenticado; agrega `reading_session` por dia (lista esparsa, só dias com leitura ativa); validação de intervalo (até 366 dias); limites `DateTime` *Unspecified* (Npgsql); E2E contra o banco de dev |
+| #36 | RF27 — Recomendação (content-based, ML.NET) | Filtragem baseada em conteúdo com **ML.NET**: vetores **TF-IDF** (título+sinopse+gêneros+área) em índice esparso em memória (serviço de segundo plano); vetor de gosto = centroide do histórico + pseudo-documento das preferências; similaridade de **cosseno**; *cold start* → popularidade; **deduplicação** por obra e por edição/tradução (chave título+autor e similaridade de conteúdo); E2E contra o banco de dev |
+| #37 | RF27 — Métricas de leitura | `GET /api/reading/stats` autenticado → tempo total/hoje/média, **sequência atual e recorde** (dias consecutivos) e dias no mês, agregados da `reading_session` por dia; alimenta os cartões da tela de recomendações; sem migração; E2E contra o banco de dev |
 
 Na listagem, `relevance` utiliza popularidade como critério inicial. A rota
 `/api/publications/search` é um alias público de `/api/publications`, com o
