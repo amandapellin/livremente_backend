@@ -10,6 +10,10 @@ public static class RegisterValidation
 {
     private static readonly string[] AllowedLanguages = ["pt", "en", "es", "fr", "ru"];
 
+    // Idade máxima plausível: define o limite inferior da data de nascimento
+    // (não anterior a hoje − MaxAgeYears, não posterior a hoje). Issue #82.
+    private const int MaxAgeYears = 120;
+
     public static string? Validate(RegisterRequest req)
     {
         var name = req.Name?.Trim();
@@ -26,8 +30,11 @@ public static class RegisterValidation
         if (string.IsNullOrEmpty(req.BirthDate)
             || !DateOnly.TryParse(req.BirthDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var birth))
             return "Data de nascimento inválida.";
-        if (birth > DateOnly.FromDateTime(DateTime.UtcNow))
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (birth > today)
             return "Data de nascimento não pode ser futura.";
+        if (birth < today.AddYears(-MaxAgeYears))
+            return $"Ano de nascimento inválido (mínimo {today.AddYears(-MaxAgeYears).Year}).";
 
         if (string.IsNullOrEmpty(req.Gender) || !Enum.GetNames<Gender>().Contains(req.Gender))
             return "Gênero inválido.";
