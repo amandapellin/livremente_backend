@@ -1,4 +1,6 @@
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -64,6 +66,7 @@ builder.Services.AddScoped<IReadingService, ReadingService>();
 builder.Services.AddScoped<IShelfService, ShelfService>();
 builder.Services.AddScoped<IDictionaryService, DictionaryService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
+builder.Services.AddScoped<ISupportService, SupportService>(); // contato do Suporte (#84)
 builder.Services.AddSingleton<IRecommendationIndex, RecommendationIndex>();
 builder.Services.AddHostedService<RecommendationIndexBuilder>();
 builder.Services.AddHttpClient(); // proxy dos arquivos de leitura (EPUB/PDF)
@@ -91,6 +94,21 @@ if (string.Equals(builder.Configuration["Email:Provider"], "Smtp", StringCompari
     builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 else
     builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
+
+// Rate limit do contato do Suporte (#84): janela fixa por IP (anti-abuso).
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("support-contact", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(10),
+                QueueLimit = 0,
+            }));
+});
 
 // Autenticação JWT: valida assinatura, emissor, audiência e expiração dos tokens.
 var jwtSection = builder.Configuration.GetSection("Jwt");
@@ -141,6 +159,7 @@ app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapGenreEndpoints();
@@ -151,6 +170,7 @@ app.MapReadingEndpoints();
 app.MapDictionaryEndpoints();
 app.MapShelfEndpoints();
 app.MapRecommendationEndpoints();
+app.MapSupportEndpoints();
 
 app.Run();
 
