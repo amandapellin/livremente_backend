@@ -275,20 +275,20 @@ public static class ReadingEndpoints
         // Blob URL p/ o iframe do PDF), já que epub.js/iframe não enviam o header.
         // O servidor busca na fonte externa (sem CORS) e transmite pela mesma origem.
         group.MapGet("/{publicationId:int}/epub",
-            (int publicationId, IReadingService reading, CancellationToken ct) =>
-                ServeFileAsync(reading, publicationId, PublicationFileKind.Epub, ct));
+            (int publicationId, IReadingFileService files, CancellationToken ct) =>
+                ServeFileAsync(files, publicationId, PublicationFileKind.Epub, ct));
 
         group.MapGet("/{publicationId:int}/pdf",
-            (int publicationId, IReadingService reading, CancellationToken ct) =>
-                ServeFileAsync(reading, publicationId, PublicationFileKind.Pdf, ct));
+            (int publicationId, IReadingFileService files, CancellationToken ct) =>
+                ServeFileAsync(files, publicationId, PublicationFileKind.Pdf, ct));
 
         return group;
     }
 
     private static async Task<IResult> ServeFileAsync(
-        IReadingService reading, int publicationId, PublicationFileKind kind, CancellationToken ct)
+        IReadingFileService files, int publicationId, PublicationFileKind kind, CancellationToken ct)
     {
-        var result = await reading.GetFileAsync(publicationId, kind, ct);
+        var result = await files.GetFileAsync(publicationId, kind, ct);
         return result.Status switch
         {
             GetFileStatus.Ok => Results.File(result.Content!, result.ContentType!, enableRangeProcessing: true),

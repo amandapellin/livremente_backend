@@ -7,21 +7,8 @@ public enum SaveLastPageResult
     NotEpub,
 }
 
-public enum PublicationFileKind
-{
-    Epub,
-    Pdf,
-}
-
-public enum GetFileStatus
-{
-    Ok,
-    PublicationNotFound,
-    NotAvailable,   // a publicação não tem arquivo desse tipo
-    UpstreamError,  // falha ao buscar na fonte externa (Gutendex/arXiv)
-}
-
-public record PublicationFileResult(GetFileStatus Status, byte[]? Content, string? ContentType);
+// Os tipos de arquivo (PublicationFileKind/GetFileStatus/PublicationFileResult) e o
+// proxy de EPUB/PDF/capa foram extraídos para IReadingFileService.
 
 // Status reusa SaveLastPageResult (mesma família EPUB-only: Saved/PublicationNotFound/
 // NotEpub). Highlight != null só quando Saved.
@@ -107,19 +94,6 @@ public interface IReadingService
     /// é EPUB simplesmente não tem grifos/anotações).
     /// </summary>
     Task<Dtos.ReadingNotesDto> GetHighlightsAndAnnotationsAsync(int userId, int publicationId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Baixa, no servidor, o arquivo (EPUB/PDF) da fonte externa e o devolve em
-    /// bytes, para o front consumi-lo pela mesma origem (sem CORS). RF15/RF16.
-    /// </summary>
-    Task<PublicationFileResult> GetFileAsync(int publicationId, PublicationFileKind kind, CancellationToken ct = default);
-
-    /// <summary>
-    /// Baixa, no servidor, a capa da publicação (URL do Gutendex) e a devolve em
-    /// bytes, para o front consumi-la pela mesma origem (sem CORS) e amostrar a cor
-    /// dominante da lombada na estante (#27). `NotAvailable` quando a obra não tem capa.
-    /// </summary>
-    Task<PublicationFileResult> GetCoverAsync(int publicationId, CancellationToken ct = default);
 
     /// <summary>
     /// Calendário de frequência de leitura (RF09, #35): agrega as sessões do usuário
