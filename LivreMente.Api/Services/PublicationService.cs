@@ -105,10 +105,20 @@ public class PublicationService(LivreMenteDbContext db) : IPublicationService
             // de archives fica vazia e nenhum artigo casa (e vice-versa) — faceta correta.
             var bookNames = filters.GenreBookNames;
             var archives = filters.GenreArchives;
+            // Artigo: o knowledge_area guarda a categoria do arXiv COM subcategoria
+            // (ex.: "math.AG", "cs.AI", "cond-mat.supr-con"); é preciso casar pelo
+            // ARCHIVE (trecho antes do primeiro '.'), não pela string inteira. Com o
+            // Contains cru, só os archives SEM subcategoria casavam — e vários deles são
+            // de física (hep-th, quant-ph, gr-qc…), então só Física retornava e as demais
+            // áreas vinham vazias (bug #89). Equivale ao PreferenceCatalog.ArchiveOf, mas
+            // numa forma traduzível para SQL: igualdade exata OU prefixo "archive." (o
+            // ponto evita que "math" capture "math-ph", que é física).
             publications = publications.Where(p =>
                 (p.Type == PublicationType.book && p.Genres.Any(g => bookNames.Contains(g.Name)))
                 || (p.Type == PublicationType.scientific_article
-                    && p.KnowledgeArea != null && archives.Contains(p.KnowledgeArea)));
+                    && p.KnowledgeArea != null
+                    && (archives.Contains(p.KnowledgeArea)
+                        || archives.Any(a => p.KnowledgeArea!.StartsWith(a + ".")))));
         }
 
         return publications;
