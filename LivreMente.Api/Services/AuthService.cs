@@ -7,6 +7,7 @@ using LivreMente.Api.Mappings;
 using LivreMente.Api.Models;
 using LivreMente.Api.Models.Enums;
 using LivreMente.Api.Security;
+using static LivreMente.Api.Common.Clock;
 
 namespace LivreMente.Api.Services;
 
@@ -34,8 +35,6 @@ public class AuthService(
     // existe (anti-enumeração por timing). Calculado uma vez por processo.
     private static string? _timingHash;
 
-    /// <summary>Timestamp UTC como Unspecified — exigido pelas colunas `timestamp without time zone`.</summary>
-    private static DateTime Now() => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 
     public async Task<RegisterResult> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
     {

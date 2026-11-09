@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using LivreMente.Api.Common;
 using LivreMente.Api.Dtos;
 using LivreMente.Api.Mappings;
 using LivreMente.Api.Models;
@@ -90,17 +91,9 @@ public class ShelfService(LivreMenteDbContext db) : IShelfService
         if (!exists)
             return false;
 
-        // Upsert atômico (ON CONFLICT), mesma proteção contra corrida dos auto-saves
-        // do leitor: cria o registro se a obra não está na estante (RN05 pelo
-        // uq_shelf_user_publication); no conflito atualiza SÓ o status, preservando
-        // read_percentage / last_page_read / bookmarked_page. O estado chega como o
-        // label do enum (os membros do enum são os labels do Postgres).
-        var label = status.ToString();
-        await _db.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO shelf (user_id, publication_id, status)
-            VALUES ({userId}, {publicationId}, {label}::reading_status_enum)
-            ON CONFLICT (user_id, publication_id)
-            DO UPDATE SET status = EXCLUDED.status", ct);
+        // Upsert atômico (ON CONFLICT): cria se a obra não está na estante; no conflito
+        // atualiza SÓ o status, preservando o progresso (RN05 pelo uq_shelf_user_publication).
+        await ShelfUpsert.UpsertStatusAsync(_db.Database, userId, publicationId, status, ct);
 
         return true;
     }
