@@ -69,9 +69,9 @@ public static class PublicationEndpoints
         // na mesma origem, para a estante amostrar a cor dominante da lombada no
         // canvas. Público (o acervo é público); 404 sem capa/obra, 502 na fonte.
         group.MapGet("/{id:int}/cover", async (
-            int id, IReadingService reading, CancellationToken ct) =>
+            int id, IReadingFileService files, CancellationToken ct) =>
         {
-            var result = await reading.GetCoverAsync(id, ct);
+            var result = await files.GetCoverAsync(id, ct);
             return result.Status switch
             {
                 GetFileStatus.Ok => Results.File(result.Content!, result.ContentType!),

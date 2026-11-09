@@ -27,7 +27,7 @@ public class PopularBooksCacheWarmer(
 
             using var scope = scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<LivreMenteDbContext>();
-            var reading = scope.ServiceProvider.GetRequiredService<IReadingService>();
+            var files = scope.ServiceProvider.GetRequiredService<IReadingFileService>();
 
             var ids = await db.Publications.AsNoTracking()
                 .Where(p => p.Type == PublicationType.book && p.EpubFileUrl != null)
@@ -44,7 +44,7 @@ public class PopularBooksCacheWarmer(
                     break;
                 try
                 {
-                    await reading.GetFileAsync(id, PublicationFileKind.Epub, stoppingToken);
+                    await files.GetFileAsync(id, PublicationFileKind.Epub, stoppingToken);
                 }
                 catch (Exception ex)
                 {
