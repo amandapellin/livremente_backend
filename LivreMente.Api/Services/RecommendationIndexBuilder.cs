@@ -17,6 +17,7 @@ public class RecommendationIndexBuilder(
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
     IRecommendationIndex index,
+    IHostEnvironment env,
     ILogger<RecommendationIndexBuilder> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -25,12 +26,32 @@ public class RecommendationIndexBuilder(
             return;
         var max = configuration.GetValue<int?>("Recommendation:IndexMaxItems") ?? 30000;
 
+        // Onde o índice fica em disco (persistência entre reinicializações).
+        var cacheDir = configuration.GetValue<string>("Recommendation:IndexCachePath")
+            ?? Path.Combine(env.ContentRootPath, "App_Data", "recommendation-index");
+
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); // deixa a app subir
 
             using var scope = scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<LivreMenteDbContext>();
+
+            // Assinatura do corpus: o índice só depende do acervo, que muda apenas
+            // quando novas publicações são importadas. Se a assinatura persistida bate
+            // com a atual, recarrega do disco (sem refit); senão, reconstrói e persiste.
+            var count = await db.Publications.CountAsync(stoppingToken);
+            var maxId = await db.Publications.MaxAsync(p => (int?)p.Id, stoppingToken) ?? 0;
+            var signature = new RecommendationIndexStore.Signature(count, maxId, max);
+
+            if (RecommendationIndexStore.TryLoad(cacheDir, signature,
+                    out var cachedMl, out var cachedModel, out var cachedVectors, out var cachedTypes))
+            {
+                index.Load(cachedMl, cachedModel, cachedVectors, cachedTypes);
+                logger.LogInformation(
+                    "Índice de recomendação carregado do cache: {Count} obras (sem refit).", cachedVectors.Count);
+                return;
+            }
 
             var rows = await db.Publications.AsNoTracking()
                 .OrderByDescending(p => p.DownloadCount ?? 0)
@@ -102,7 +123,19 @@ public class RecommendationIndexBuilder(
 
             var types = rows.ToDictionary(r => r.Id, r => r.Type);
             index.Load(ml, model, vectors, types);
-            logger.LogInformation("Índice de recomendação pronto: {Count} obras indexadas.", vectors.Count);
+            logger.LogInformation("Índice de recomendação reconstruído: {Count} obras indexadas.", vectors.Count);
+
+            // Persiste para as próximas reinicializações reusarem (só refaz quando o
+            // catálogo muda). Best-effort: falhar aqui não derruba nada (segue em memória).
+            try
+            {
+                RecommendationIndexStore.Save(cacheDir, ml, model, data.Schema, vectors, types, signature);
+                logger.LogInformation("Índice de recomendação persistido em {Dir}.", cacheDir);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Falha ao persistir o índice de recomendação (segue em memória).");
+            }
         }
         catch (OperationCanceledException)
         {

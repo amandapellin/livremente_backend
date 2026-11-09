@@ -38,3 +38,5 @@ appsettings.Local.json
 secrets.json
 *.pfx
 *.key
+# Cache do índice de recomendação (gerado em runtime, persistência do TF-IDF)
+App_Data/
