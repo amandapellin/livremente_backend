@@ -21,6 +21,15 @@ optionsBuilder.UseNpgsql(config.GetConnectionString("DefaultConnection"), o =>
 using var db = new LivreMenteDbContext(optionsBuilder.Options);
 using var http = new HttpClient();
 
+// Backfill único dos títulos de artigos (issue #85): limpa o LaTeX dos títulos já
+// importados, sem reimportar. `-- --clean-titles` (ou com `--dry-run` para simular).
+if (args.Contains("--clean-titles"))
+{
+    await TitleBackfill.RunAsync(db, dryRun: args.Contains("--dry-run"));
+    Console.WriteLine("Concluído.");
+    return;
+}
+
 await new GutendexImporter(http, db).ImportAsync(maxPages: 100, startPage: 1762);
 
 var arxivCategories = new[]
