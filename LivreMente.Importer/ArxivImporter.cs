@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Microsoft.EntityFrameworkCore;
+using LivreMente.Api.Importing;
 using LivreMente.Api.Models;
 using LivreMente.Api.Models.Enums;
 
@@ -32,7 +33,9 @@ public class ArxivImporter(HttpClient http, LivreMenteDbContext db)
                     .AnyAsync(m => m.Source == PublicationSource.arxiv && m.ExternalId == externalId);
                 if (exists) continue;
 
-                var title = entry.Element(Atom + "title")?.Value.Trim().Replace("\n", " ") ?? "";
+                // Títulos do arXiv trazem LaTeX embutido ($...$, \mathbb{}, ^, _); limpa
+                // para texto legível e ordenável no banco (issue #85).
+                var title = TitleSanitizer.Clean(entry.Element(Atom + "title")?.Value);
                 var summary = entry.Element(Atom + "summary")?.Value.Trim() ?? "";
                 var published = entry.Element(Atom + "published")?.Value;
                 int? year = DateTime.TryParse(published, out var d) ? d.Year : null;
