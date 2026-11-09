@@ -2,9 +2,11 @@ using System.Collections.Concurrent;
 using System.Net.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using LivreMente.Api.Common;
 using LivreMente.Api.Dtos;
 using LivreMente.Api.Models;
 using LivreMente.Api.Models.Enums;
+using static LivreMente.Api.Common.Clock;
 
 namespace LivreMente.Api.Services;
 
@@ -25,8 +27,6 @@ public class ReadingService(
     // concorrentes (StrictMode do dev dispara em dobro; evita 502 por concorrência).
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> FileGates = new();
 
-    /// <summary>UTC como Unspecified — exigido pelas colunas `timestamp without time zone`.</summary>
-    private static DateTime Now() => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 
     public async Task<SaveLastPageResult> SaveLastPageAsync(
         int userId, int publicationId, int lastPageRead, CancellationToken ct = default)
@@ -43,15 +43,10 @@ public class ReadingService(
         if (string.IsNullOrEmpty(pub.EpubFileUrl))
             return SaveLastPageResult.NotEpub;
 
-        // Upsert ATÔMICO na estante (ON CONFLICT): ler já implica "lendo", então
-        // cria com status = reading se não existir; senão só atualiza a última
-        // página. Atômico para não quebrar com auto-saves concorrentes (o
-        // find-or-create inseria em corrida e violava uq_shelf_user_publication).
-        await _db.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO shelf (user_id, publication_id, status, last_page_read)
-            VALUES ({userId}, {publicationId}, 'reading'::reading_status_enum, {lastPageRead})
-            ON CONFLICT (user_id, publication_id)
-            DO UPDATE SET last_page_read = EXCLUDED.last_page_read", ct);
+        // Upsert atômico na estante: ler já implica "lendo"; no conflito só atualiza
+        // a última página (ver ShelfUpsert).
+        await ShelfUpsert.UpsertProgressAsync(
+            _db.Database, userId, publicationId, ShelfUpsert.ShelfProgressColumn.LastPageRead, lastPageRead, ct);
 
         return SaveLastPageResult.Saved;
     }
@@ -70,12 +65,9 @@ public class ReadingService(
         if (string.IsNullOrEmpty(pub.EpubFileUrl))
             return SaveLastPageResult.NotEpub;
 
-        // Upsert atômico (mesma proteção contra corrida do auto-save do #22).
-        await _db.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO shelf (user_id, publication_id, status, read_percentage)
-            VALUES ({userId}, {publicationId}, 'reading'::reading_status_enum, {readPercentage})
-            ON CONFLICT (user_id, publication_id)
-            DO UPDATE SET read_percentage = EXCLUDED.read_percentage", ct);
+        // Upsert atômico (ver ShelfUpsert; mesma proteção contra corrida do #22).
+        await ShelfUpsert.UpsertProgressAsync(
+            _db.Database, userId, publicationId, ShelfUpsert.ShelfProgressColumn.ReadPercentage, readPercentage, ct);
 
         return SaveLastPageResult.Saved;
     }
@@ -131,14 +123,10 @@ public class ReadingService(
         if (!exists)
             return false;
 
-        // Upsert atômico (ON CONFLICT), mesma proteção contra corrida dos auto-saves:
-        // marcar implica "lendo", então cria com status = reading; no conflito só
-        // atualiza bookmarked_page (não toca em status/last_page_read/read_percentage).
-        await _db.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO shelf (user_id, publication_id, status, bookmarked_page)
-            VALUES ({userId}, {publicationId}, 'reading'::reading_status_enum, {bookmarkedPage})
-            ON CONFLICT (user_id, publication_id)
-            DO UPDATE SET bookmarked_page = EXCLUDED.bookmarked_page", ct);
+        // Upsert atômico: marcar implica "lendo"; no conflito só atualiza
+        // bookmarked_page (ver ShelfUpsert).
+        await ShelfUpsert.UpsertProgressAsync(
+            _db.Database, userId, publicationId, ShelfUpsert.ShelfProgressColumn.BookmarkedPage, bookmarkedPage, ct);
 
         return true;
     }

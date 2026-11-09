@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using LivreMente.Api.Dtos;
 using LivreMente.Api.Models;
 using LivreMente.Api.Security;
+using static LivreMente.Api.Common.Clock;
 
 namespace LivreMente.Api.Services;
 
@@ -13,8 +14,6 @@ public class UserService(LivreMenteDbContext db, IPasswordHasher passwordHasher)
 {
     private readonly LivreMenteDbContext _db = db;
     private readonly IPasswordHasher _passwordHasher = passwordHasher;
-
-    private static DateTime Now() => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 
     public async Task<UserProfileDto?> GetProfileAsync(int userId, CancellationToken ct = default)
     {
