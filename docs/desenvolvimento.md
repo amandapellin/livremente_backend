@@ -232,9 +232,14 @@ Para a vetorização dos textos adotou-se a biblioteca **ML.NET**. Cada obra é
 representada por um **vetor TF-IDF** (frequência do termo ponderada pela
 frequência inversa nos documentos) construído a partir de seu texto descritivo
 (título, sinopse, gêneros e área), com uso de bigramas e normalização L2. Esses
-vetores, mantidos de forma **esparsa em memória**, são calculados na
-inicialização por um serviço de segundo plano, de modo a não onerar as
-requisições.
+vetores são mantidos de forma **esparsa em memória**, para não onerar as
+requisições. Como essa representação **depende apenas do acervo** — que só muda
+quando novas publicações são importadas, e não a cada requisição ou usuário —, o
+índice é calculado **uma única vez** por um serviço de segundo plano e
+**persistido em disco** (o modelo e os vetores); nas reinicializações seguintes
+ele é **recarregado** desse armazenamento e só é **recalculado quando o catálogo
+muda**, o que é verificado por uma **assinatura do corpus**, evitando refazer o
+cálculo a cada reinício do serviço.
 
 O "vetor de gosto" do usuário é o **centroide** (normalizado) dos vetores das
 obras de seu **histórico** (lidas e em leitura), somado a um **pseudo-documento**
@@ -299,6 +304,7 @@ tecnologias empregadas.*
 | — | Segurança — autenticação da leitura | Os *endpoints* de arquivo `epub`/`pdf` passaram a **exigir JWT** (antes públicos); o front obtém o arquivo por requisição autenticada e o entrega ao leitor por URL local (*blob*) de mesma origem; verificado no navegador |
 | #35 | RF09 — Calendário de frequência | `GET /api/reading/calendar?from&to` autenticado; agrega `reading_session` por dia (lista esparsa, só dias com leitura ativa); validação de intervalo (até 366 dias); limites `DateTime` *Unspecified* (Npgsql); E2E contra o banco de dev |
 | #36 | RF27 — Recomendação (content-based, ML.NET) | Filtragem baseada em conteúdo com **ML.NET**: vetores **TF-IDF** (título+sinopse+gêneros+área) em índice esparso em memória (serviço de segundo plano); vetor de gosto = centroide do histórico + pseudo-documento das preferências; similaridade de **cosseno**; *cold start* → popularidade; **deduplicação** por obra e por edição/tradução (chave título+autor e similaridade de conteúdo); E2E contra o banco de dev |
+| — | Recomendação — persistência do índice | O índice (modelo + vetores TF-IDF) deixa de ser reconstruído a cada reinicialização: é calculado uma vez e **persistido em disco**, recarregado nos reinícios e recalculado apenas quando o catálogo muda (verificado por uma **assinatura do corpus**); evita o *refit* redundante a cada *startup*. Gravação atômica; caminho configurável |
 | #37 | RF27 — Métricas de leitura | `GET /api/reading/stats` autenticado → tempo total/hoje/média, **sequência atual e recorde** (dias consecutivos) e dias no mês, agregados da `reading_session` por dia; alimenta os cartões da tela de recomendações; sem migração; E2E contra o banco de dev |
 | #85 | Correção — caracteres especiais nos títulos de artigos | Origem identificada na importação (notação **LaTeX** do arXiv gravada verbatim), que quebrava a exibição e a ordenação A-Z (feita no banco, server-side); `TitleSanitizer` normaliza a marcação para texto *Unicode* legível, aplicado no `ArxivImporter` (obras futuras) e em um **backfill** idempotente das linhas existentes (`--clean-titles`, apenas DML, sem migração/reimportação); verificado no navegador (sem LaTeX, ordenação consistente) |
 | #89 | Correção — filtro por área de conhecimento (RF12) | Origem identificada na **query**, não na importação: o filtro de artigos comparava a categoria completa do arXiv (`math.AG`, `cs.AI`) com os prefixos de *archive* (`math`, `cs`), casando apenas os sem subcategoria — vários de física —, de modo que só "Física" retornava; a correção passa a casar pelo *archive* (igualdade exata ou prefixo), numa forma traduzível para SQL; cada área volta a retornar seus artigos; sem migração, sem reimportação, sem mudança no front |
