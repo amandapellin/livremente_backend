@@ -90,8 +90,12 @@ builder.Services.AddHostedService<PopularBooksCacheWarmer>(); // pré-aquece o c
 builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-// Provedor de e-mail selecionado por configuração: "Smtp" (real) ou "Logging" (dev, padrão).
-if (string.Equals(builder.Configuration["Email:Provider"], "Smtp", StringComparison.OrdinalIgnoreCase))
+// Provedor de e-mail selecionado por configuração: "Acs" (Azure Communication Services,
+// real), "Smtp" (real) ou "Logging" (dev, padrão).
+var emailProvider = builder.Configuration["Email:Provider"];
+if (string.Equals(emailProvider, "Acs", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddScoped<IEmailSender, AcsEmailSender>();
+else if (string.Equals(emailProvider, "Smtp", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 else
     builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
