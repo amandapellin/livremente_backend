@@ -25,10 +25,11 @@ referenciados por código: **RFxx** (funcional), **RNxx** (regra de negócio).
 
 ## 2. Stack
 
-**Back-end:** C# / .NET 9 · ASP.NET Core **Minimal API** · EF Core 9 + **Npgsql**
-(PostgreSQL) · **Database First** · Swagger/OpenAPI · BCrypt.Net-Next (hash de
+**Back-end:** C# / **.NET 10 (LTS)** · ASP.NET Core **Minimal API** · EF Core 10 + **Npgsql**
+(PostgreSQL) · **Database First** · Swagger/OpenAPI (Swashbuckle) · BCrypt.Net-Next (hash de
 senha) · MailKit (SMTP). Projeto de importação à parte: `LivreMente.Importer`
-(console).
+(console). _(Migrado de .NET 9 → 10 — ver "Status por issue"; o .NET 9 é STS e saiu de
+suporte. O App Service só oferece .NET 10/11, então o runtime fica alinhado.)_
 
 **Front-end:** React + TypeScript · Vite · Material UI (MUI) · React Router ·
 React Hook Form + Zod · TanStack Query · **orval** (gera cliente HTTP a partir do
@@ -152,6 +153,8 @@ corresponder aos `value` das opções do front.**
 - Follow-ups: reenvio de confirmação; provedor SMTP real em produção (só configuração).
 
 **Implementado / aguardando revisão e merge:**
+
+- **Migração .NET 9 → .NET 10 (LTS) — preparação para deploy:** o .NET 9 é STS e **saiu de suporte** (maio/2026), e o Azure App Service só oferece **.NET 10/11** na pilha de runtime — manter o 9 exigiria container/self-contained só para contornar a versão. `TargetFramework` de **`LivreMente.Api`** e **`LivreMente.Importer`** → `net10.0`; pacotes `Microsoft.*`/`Npgsql.EntityFrameworkCore.PostgreSQL` → **`10.0.0`** (EF Core 10). **Removido `Microsoft.AspNetCore.OpenApi`** (estava **sem uso** — o Swagger é só Swashbuckle via `AddSwaggerGen`/`UseSwagger`): no .NET 10 esse pacote puxava `Microsoft.OpenApi` **2.0**, cujos namespaces achatados quebravam o bloco `AddSecurityDefinition`/`OpenApiSecurityScheme` do `Program.cs` (`CS0234` em `Microsoft.OpenApi.Models`); sem ele, o Swashbuckle resolve `Microsoft.OpenApi` **1.6.23** e o código do Swagger fica **intacto**. **Advisory transitivo** (`System.Security.Cryptography.Pkcs` via MailKit→MimeKit, `NU1903` alto) neutralizado com `PackageReference` explícito na patch **`10.0.15`** (standalone — só copia o DLL, sem exigir runtime novo no host). CI atualizado (`.github/workflows/backend-ci.yml`: `setup-dotnet` `9.0.x` → **`10.0.x`**). **Database First sem EF Migrations → a troca EF 9→10 não gera migração**; o mapeamento de enum do Npgsql (`MapEnum` no `UseNpgsql` + `HasPostgresEnum`) segue idêntico; **sem mudança de esquema, contrato nem comportamento**. SDK 10.0.404 usado no build. **Build Release verde: 0 erros**, só os 2 avisos pré-existentes (`CS8604` do SMTP e `CS0436` dos dois `Program` top-level Api/Importer). _Smoke/E2E logado a cargo da Amanda (banco dá timeout no workspace do agente — firewall do Azure)._
 
 - **Refatoração — proxy de arquivo/capa extraído do `ReadingService`, branch `refactor/extrai-proxy-arquivo-capa`:** o `ReadingService` (479 linhas) concentrava o épico de Leitura **e** o proxy same-origin de EPUB/PDF/capa (download no servidor + cache + single-flight + retry). O proxy — parte autocontida e de baixo acoplamento — virou **`IReadingFileService`/`ReadingFileService`** (`GetFileAsync`/`GetCoverAsync` + helpers `PreferNoImagesEpub`/`NoImagesFirst`/`DownloadFirstAsync`/`DownloadWithRetryAsync` + `FileGates` + deps `IHttpClientFactory`/`IMemoryCache`/`IConfiguration`). Os tipos de arquivo (`PublicationFileKind`/`GetFileStatus`/`PublicationFileResult`) migraram para `IReadingFileService.cs` (mesma namespace — consumidores não mudaram `using`). O `ReadingService` fica focado em progresso/notas/sessão/stats (**309 linhas**, construtor só com `DbContext`). Chamadores atualizados — `ReadingEndpoints` (`/epub`,`/pdf`), `PublicationEndpoints` (`/cover`) e `PopularBooksCacheWarmer` injetam `IReadingFileService`; novo `AddScoped<IReadingFileService, ReadingFileService>()` no `Program.cs`. **Sem mudança de contrato, esquema nem comportamento.** Build Release OK (só o aviso CS8604 pré-existente). _E2E logado a cargo da Amanda (banco dá timeout no workspace do agente)._
 
