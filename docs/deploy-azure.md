@@ -142,7 +142,11 @@ popular com o Importer, para não misturar dados de teste com a demonstração.
    - `ConnectionStrings__DefaultConnection` → referência ao Key Vault
    - `Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`
    - `Cors__AllowedOrigins__0` → URL do front (SWA) — ver Passo 8
-   - `FrontendBaseUrl` → URL do front (redirecionamento da confirmação de e-mail)
+   - `App__PublicApiBaseUrl` → **URL pública desta API** (App Service). ⚠️ O link do e-mail de
+     confirmação é `{App:PublicApiBaseUrl}/api/auth/confirm?token=...` (`AuthService`); o default
+     é `http://localhost:5091`, então **sem isto o link aponta para localhost e a conta não confirma**.
+   - `App__FrontendBaseUrl` → URL do front (SWA); após confirmar, a API redireciona para
+     `{App:FrontendBaseUrl}/login?confirmed=1` (`AuthEndpoints`)
    - `Email__Provider=Acs` + `Email__Acs__ConnectionString` (Key Vault) + `Email__Acs__FromAddress` — ver Passo 5
    - `Support__Email` (destino do formulário de contato)
    - `Recommendation__IndexCachePath` → default (`App_Data/...` em `/home`, persistente) **ou**
@@ -172,12 +176,20 @@ popular com o Importer, para não misturar dados de teste com a demonstração.
 3. **Communication Services** → Criar (RG `livremente-rg`, ex. `livremente-comm`).
 4. No `livremente-comm` → **Email → Domains → Connect domain** → selecione o domínio azurecomm.
 
+> **Domínio custom (opcional):** em vez do azurecomm, dá para usar um domínio próprio
+> (ex.: `livrementeapp.com.br`) — **Add domain → Custom domain**, verificar por **TXT** e
+> autenticar com **SPF (TXT)** + **DKIM (2 CNAME)** no DNS do domínio; depois **Connect
+> domain** no `livremente-comm` e o `FromAddress` vira `nao-responda@seudominio`.
+
 **Fase 2 — Configurar o app:**
 - No `livremente-comm` → **Keys** → copie a **connection string**.
+- Em **MailFrom addresses** do domínio, defina o **Display name = `LivreMente`** (é o nome que
+  o destinatário vê; **não** é configurável no código — o SDK do ACS só aceita o endereço do
+  remetente, então o nome amigável vem daqui).
 - Defina as App Settings (connection string como **segredo** no Key Vault):
   - `Email__Provider=Acs`
   - `Email__Acs__ConnectionString` → segredo `Email--Acs--ConnectionString` no Key Vault
-  - `Email__Acs__FromAddress` = `DoNotReply@<guid>.azurecomm.net` (não-secreto)
+  - `Email__Acs__FromAddress` = o MailFrom (`DoNotReply@<guid>.azurecomm.net` ou `nao-responda@seudominio`, não-secreto)
 - Em **dev** continua `Email:Provider=Logging` (imprime o link no log). O `Smtp` (MailKit)
   segue disponível como alternativa.
 
@@ -205,7 +217,8 @@ Insights → Enable). Instrumenta requests/falhas e captura os `ILogger` (avisos
 ### Passo 8 — Amarrar o contrato front ↔ back
 Três pontas (todas configuráveis, sem código):
 - **CORS:** `Cors__AllowedOrigins__0` = domínio do SWA (só na Opção B).
-- **`FrontendBaseUrl`:** = domínio do SWA (redirect do `GET /api/auth/confirm`).
+- **`App__FrontendBaseUrl`:** = domínio do SWA (redirect do `GET /api/auth/confirm`).
+- **`App__PublicApiBaseUrl`:** = URL pública da API (App Service) — usada no link do e-mail de confirmação.
 - **`VITE_API_URL`:** conforme a opção A/B.
 
 ### Passo 9 — CI/CD com GitHub Actions
@@ -242,7 +255,8 @@ Console, não serviço web. Opções, da mais simples:
 ConnectionStrings__DefaultConnection   (Key Vault)   Host=...;Database=livre_mente_prod;Username=livremente_app;Password=...;SSL Mode=Require;Trust Server Certificate=true
 Jwt__Key / Jwt__Issuer / Jwt__Audience (Key Vault + settings)
 Cors__AllowedOrigins__0                = https://<seu-front>.azurestaticapps.net
-FrontendBaseUrl                        = https://<seu-front>.azurestaticapps.net
+App__FrontendBaseUrl                   = https://<seu-front>.azurestaticapps.net
+App__PublicApiBaseUrl                  = https://<sua-api>.azurewebsites.net   (link do e-mail de confirmação)
 Email__Provider                        = Acs
 Email__Acs__ConnectionString           (Key Vault: Email--Acs--ConnectionString)
 Email__Acs__FromAddress                = DoNotReply@<guid>.azurecomm.net
