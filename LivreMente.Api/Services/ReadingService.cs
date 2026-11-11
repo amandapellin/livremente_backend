@@ -1,0 +1,309 @@
+using Microsoft.EntityFrameworkCore;
+using LivreMente.Api.Common;
+using LivreMente.Api.Dtos;
+using LivreMente.Api.Models;
+using LivreMente.Api.Models.Enums;
+using static LivreMente.Api.Common.Clock;
+
+namespace LivreMente.Api.Services;
+
+/// <summary>
+/// Regra de negócio do épico de Leitura. Opera sempre sobre a estante do próprio
+/// usuário (id vindo do token) — RN04 por construção.
+/// </summary>
+public class ReadingService(LivreMenteDbContext db) : IReadingService
+{
+    private readonly LivreMenteDbContext _db = db;
+
+
+    public async Task<SaveLastPageResult> SaveLastPageAsync(
+        int userId, int publicationId, int lastPageRead, CancellationToken ct = default)
+    {
+        // RF17/RN08: só EPUB tem "última página". EPUB = possui arquivo EPUB
+        // (livros do Gutendex); artigos (PDF) não.
+        var pub = await _db.Publications.AsNoTracking()
+            .Where(p => p.Id == publicationId)
+            .Select(p => new { p.EpubFileUrl })
+            .FirstOrDefaultAsync(ct);
+
+        if (pub is null)
+            return SaveLastPageResult.PublicationNotFound;
+        if (string.IsNullOrEmpty(pub.EpubFileUrl))
+            return SaveLastPageResult.NotEpub;
+
+        // Upsert atômico na estante: ler já implica "lendo"; no conflito só atualiza
+        // a última página (ver ShelfUpsert).
+        await ShelfUpsert.UpsertProgressAsync(
+            _db.Database, userId, publicationId, ShelfUpsert.ShelfProgressColumn.LastPageRead, lastPageRead, ct);
+
+        return SaveLastPageResult.Saved;
+    }
+
+    public async Task<SaveLastPageResult> SavePercentageAsync(
+        int userId, int publicationId, int readPercentage, CancellationToken ct = default)
+    {
+        // RF19: percentual só faz sentido para EPUB (livros do Gutendex).
+        var pub = await _db.Publications.AsNoTracking()
+            .Where(p => p.Id == publicationId)
+            .Select(p => new { p.EpubFileUrl })
+            .FirstOrDefaultAsync(ct);
+
+        if (pub is null)
+            return SaveLastPageResult.PublicationNotFound;
+        if (string.IsNullOrEmpty(pub.EpubFileUrl))
+            return SaveLastPageResult.NotEpub;
+
+        // Upsert atômico (ver ShelfUpsert; mesma proteção contra corrida do #22).
+        await ShelfUpsert.UpsertProgressAsync(
+            _db.Database, userId, publicationId, ShelfUpsert.ShelfProgressColumn.ReadPercentage, readPercentage, ct);
+
+        return SaveLastPageResult.Saved;
+    }
+
+    public async Task<int?> StartSessionAsync(int userId, int publicationId, CancellationToken ct = default)
+    {
+        // RF20: vale para EPUB e PDF — basta a publicação existir.
+        var exists = await _db.Publications.AsNoTracking().AnyAsync(p => p.Id == publicationId, ct);
+        if (!exists)
+            return null;
+
+        var session = new ReadingSession
+        {
+            UserId = userId,
+            PublicationId = publicationId,
+            StartTime = Now(),
+            ActiveSeconds = 0,
+        };
+        _db.ReadingSessions.Add(session);
+        await _db.SaveChangesAsync(ct);
+        return session.Id;
+    }
+
+    public async Task<bool> UpdateSessionAsync(int userId, int sessionId, int activeSeconds, CancellationToken ct = default)
+    {
+        // Só a sessão do próprio usuário (sem revelar as de outros) — RN04.
+        var session = await _db.ReadingSessions
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, ct);
+        if (session is null)
+            return false;
+
+        session.ActiveSeconds = activeSeconds;
+        session.EndTime = Now(); // end_time acompanha o último heartbeat
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<int?> GetLastPageAsync(int userId, int publicationId, CancellationToken ct = default)
+    {
+        // Sem linha de estante OU last_page_read nulo → null (nunca leu / não salvo).
+        return await _db.Shelves.AsNoTracking()
+            .Where(s => s.UserId == userId && s.PublicationId == publicationId)
+            .Select(s => s.LastPageRead)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<bool> SaveBookmarkAsync(
+        int userId, int publicationId, int bookmarkedPage, CancellationToken ct = default)
+    {
+        // RF21: a marcação vale para EPUB e PDF — basta a publicação existir (sem
+        // gate de formato, diferente do last-page/percentage).
+        var exists = await _db.Publications.AsNoTracking().AnyAsync(p => p.Id == publicationId, ct);
+        if (!exists)
+            return false;
+
+        // Upsert atômico: marcar implica "lendo"; no conflito só atualiza
+        // bookmarked_page (ver ShelfUpsert).
+        await ShelfUpsert.UpsertProgressAsync(
+            _db.Database, userId, publicationId, ShelfUpsert.ShelfProgressColumn.BookmarkedPage, bookmarkedPage, ct);
+
+        return true;
+    }
+
+    public async Task<int?> GetBookmarkAsync(int userId, int publicationId, CancellationToken ct = default)
+    {
+        // Sem linha de estante OU bookmarked_page nulo → null (sem marcação).
+        return await _db.Shelves.AsNoTracking()
+            .Where(s => s.UserId == userId && s.PublicationId == publicationId)
+            .Select(s => s.BookmarkedPage)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<CreateHighlightResult> CreateHighlightAsync(
+        int userId, int publicationId, CreateHighlightRequest req, CancellationToken ct = default)
+    {
+        // RN07: grifo só para EPUB (publicação com epub_file_url).
+        var pub = await _db.Publications.AsNoTracking()
+            .Where(p => p.Id == publicationId)
+            .Select(p => new { p.EpubFileUrl })
+            .FirstOrDefaultAsync(ct);
+
+        if (pub is null)
+            return new CreateHighlightResult(SaveLastPageResult.PublicationNotFound, null);
+        if (string.IsNullOrEmpty(pub.EpubFileUrl))
+            return new CreateHighlightResult(SaveLastPageResult.NotEpub, null);
+
+        var highlight = new Highlight
+        {
+            UserId = userId,
+            PublicationId = publicationId,
+            Excerpt = req.Excerpt,
+            EpubPosition = req.EpubPosition,
+            Color = req.Color,
+            // CreateDate tem default no banco (CURRENT_TIMESTAMP) e é lido de volta.
+        };
+        _db.Highlights.Add(highlight);
+        await _db.SaveChangesAsync(ct);
+
+        var dto = new HighlightDto(
+            highlight.Id, highlight.Excerpt, highlight.EpubPosition, highlight.Color, highlight.CreateDate);
+        return new CreateHighlightResult(SaveLastPageResult.Saved, dto);
+    }
+
+    public async Task<IReadOnlyList<HighlightDto>> GetHighlightsAsync(
+        int userId, int publicationId, CancellationToken ct = default)
+    {
+        return await _db.Highlights.AsNoTracking()
+            .Where(h => h.UserId == userId && h.PublicationId == publicationId)
+            .OrderByDescending(h => h.CreateDate).ThenByDescending(h => h.Id)
+            .Select(h => new HighlightDto(h.Id, h.Excerpt, h.EpubPosition, h.Color, h.CreateDate))
+            .ToListAsync(ct);
+    }
+
+    public async Task<CreateAnnotationResult> CreateAnnotationAsync(
+        int userId, int publicationId, CreateAnnotationRequest req, CancellationToken ct = default)
+    {
+        // RN07: anotação só para EPUB (publicação com epub_file_url).
+        var pub = await _db.Publications.AsNoTracking()
+            .Where(p => p.Id == publicationId)
+            .Select(p => new { p.EpubFileUrl })
+            .FirstOrDefaultAsync(ct);
+
+        if (pub is null)
+            return new CreateAnnotationResult(SaveLastPageResult.PublicationNotFound, null);
+        if (string.IsNullOrEmpty(pub.EpubFileUrl))
+            return new CreateAnnotationResult(SaveLastPageResult.NotEpub, null);
+
+        var annotation = new Annotation
+        {
+            UserId = userId,
+            PublicationId = publicationId,
+            LinkedExcerpt = req.LinkedExcerpt,
+            Content = req.Content,
+            EpubPosition = req.EpubPosition,
+            // CreateDate tem default no banco (CURRENT_TIMESTAMP) e é lido de volta.
+        };
+        _db.Annotations.Add(annotation);
+        await _db.SaveChangesAsync(ct);
+
+        var dto = new AnnotationDto(
+            annotation.Id, annotation.LinkedExcerpt, annotation.Content, annotation.EpubPosition, annotation.CreateDate);
+        return new CreateAnnotationResult(SaveLastPageResult.Saved, dto);
+    }
+
+    public async Task<IReadOnlyList<AnnotationDto>> GetAnnotationsAsync(
+        int userId, int publicationId, CancellationToken ct = default)
+    {
+        return await _db.Annotations.AsNoTracking()
+            .Where(a => a.UserId == userId && a.PublicationId == publicationId)
+            .OrderByDescending(a => a.CreateDate).ThenByDescending(a => a.Id)
+            .Select(a => new AnnotationDto(a.Id, a.LinkedExcerpt, a.Content, a.EpubPosition, a.CreateDate))
+            .ToListAsync(ct);
+    }
+
+    public async Task<ReadingNotesDto> GetHighlightsAndAnnotationsAsync(
+        int userId, int publicationId, CancellationToken ct = default)
+    {
+        // Sequencial (o DbContext não é thread-safe para consultas concorrentes).
+        var highlights = await GetHighlightsAsync(userId, publicationId, ct);
+        var annotations = await GetAnnotationsAsync(userId, publicationId, ct);
+        return new ReadingNotesDto(highlights, annotations);
+    }
+
+    public async Task<ReadingCalendarDto> GetCalendarAsync(
+        int userId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        // Intervalo [from, to] inclusivo → meia-noite de `from` até meia-noite do dia
+        // seguinte a `to` (exclusivo). `start_time` é `timestamp without time zone`
+        // (gravado como UTC, Kind=Unspecified), então os limites também são
+        // Unspecified — o Npgsql recusaria Kind=Utc nessas colunas.
+        var start = from.ToDateTime(TimeOnly.MinValue);
+        var endExclusive = to.AddDays(1).ToDateTime(TimeOnly.MinValue);
+
+        // Agrupa por data do início da sessão; soma o tempo ativo e conta as sessões.
+        // Só dias com leitura ATIVA (HAVING soma > 0) — uma sessão aberta sem
+        // heartbeat (active_seconds = 0) não conta como frequência.
+        var rows = await _db.ReadingSessions.AsNoTracking()
+            .Where(s => s.UserId == userId && s.StartTime >= start && s.StartTime < endExclusive)
+            .GroupBy(s => s.StartTime.Date)
+            .Select(g => new
+            {
+                Date = g.Key,
+                ActiveSeconds = g.Sum(s => s.ActiveSeconds),
+                SessionCount = g.Count(),
+            })
+            .Where(x => x.ActiveSeconds > 0)
+            .ToListAsync(ct);
+
+        // Minutos com a mesma regra do #20 (mínimo 1 min quando houve leitura).
+        var days = rows
+            .OrderBy(x => x.Date)
+            .Select(x => new ReadingCalendarDayDto(
+                DateOnly.FromDateTime(x.Date),
+                Math.Max(1, (int)Math.Round(x.ActiveSeconds / 60.0)),
+                x.SessionCount))
+            .ToList();
+
+        return new ReadingCalendarDto(from, to, days);
+    }
+
+    public async Task<ReadingStatsDto> GetStatsAsync(int userId, CancellationToken ct = default)
+    {
+        // Tempo ativo por dia (UTC) do usuário; só dias com leitura (SUM > 0).
+        var rows = await _db.ReadingSessions.AsNoTracking()
+            .Where(s => s.UserId == userId)
+            .GroupBy(s => s.StartTime.Date)
+            .Select(g => new { Day = g.Key, Seconds = g.Sum(x => (long)x.ActiveSeconds) })
+            .Where(x => x.Seconds > 0)
+            .ToListAsync(ct);
+
+        if (rows.Count == 0)
+            return new ReadingStatsDto(0, 0, 0, 0, 0, 0, 0);
+
+        static int ToMinutes(long seconds) => seconds > 0 ? Math.Max(1, (int)Math.Round(seconds / 60.0)) : 0;
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var totalSeconds = rows.Sum(r => r.Seconds);
+        var todaySeconds = rows.Where(r => DateOnly.FromDateTime(r.Day) == today).Sum(r => r.Seconds);
+        var activeDays = rows.Count;
+        var daysThisMonth = rows.Count(r => r.Day.Year == today.Year && r.Day.Month == today.Month);
+
+        // Dias (ordenados) para calcular as sequências.
+        var days = rows.Select(r => DateOnly.FromDateTime(r.Day)).OrderBy(d => d).ToList();
+        var daySet = days.ToHashSet();
+
+        // Maior sequência: maior corrida de dias consecutivos.
+        int longest = 0, run = 0;
+        DateOnly? prev = null;
+        foreach (var d in days)
+        {
+            run = prev is DateOnly p && d.DayNumber == p.DayNumber + 1 ? run + 1 : 1;
+            if (run > longest) longest = run;
+            prev = d;
+        }
+
+        // Sequência atual: ancorada em hoje (ou ontem, para não zerar antes de ler hoje).
+        var current = 0;
+        var last = days[^1];
+        if (last == today || last == today.AddDays(-1))
+            for (var d = last; daySet.Contains(d); d = d.AddDays(-1))
+                current++;
+
+        var totalMinutes = ToMinutes(totalSeconds);
+        var dailyAverage = activeDays > 0 ? (int)Math.Round((double)totalMinutes / activeDays) : 0;
+
+        return new ReadingStatsDto(
+            totalMinutes, ToMinutes(todaySeconds), dailyAverage,
+            current, longest, activeDays, daysThisMonth);
+    }
+
+}

@@ -1,0 +1,87 @@
+using System.Xml.Linq;
+using Microsoft.EntityFrameworkCore;
+using LivreMente.Api.Importing;
+using LivreMente.Api.Models;
+using LivreMente.Api.Models.Enums;
+
+namespace LivreMente.Importer;
+
+public class ArxivImporter(HttpClient http, LivreMenteDbContext db)
+{
+    private readonly HttpClient _http = http;
+    private readonly LivreMenteDbContext _db = db;
+    private static readonly XNamespace Atom = "http://www.w3.org/2005/Atom";
+
+    public async Task ImportAsync(string searchQuery, int totalResults = 300, int pageSize = 100)
+    {
+        for (int start = 0; start < totalResults; start += pageSize)
+        {
+            Console.WriteLine($"arXiv ({searchQuery}): itens {start} a {start + pageSize}...");
+            var url = $"https://export.arxiv.org/api/query?search_query={searchQuery}" +
+                      $"&start={start}&max_results={pageSize}";
+
+            var xml = await _http.GetStringAsync(url);
+            var feed = XDocument.Parse(xml);
+            var entries = feed.Descendants(Atom + "entry");
+
+            foreach (var entry in entries)
+            {
+                var externalId = entry.Element(Atom + "id")?.Value ?? "";
+                if (string.IsNullOrEmpty(externalId)) continue;
+
+                var exists = await _db.Publications
+                    .AnyAsync(m => m.Source == PublicationSource.arxiv && m.ExternalId == externalId);
+                if (exists) continue;
+
+                // Títulos do arXiv trazem LaTeX embutido ($...$, \mathbb{}, ^, _); limpa
+                // para texto legível e ordenável no banco (issue #85).
+                var title = TitleSanitizer.Clean(entry.Element(Atom + "title")?.Value);
+                var summary = entry.Element(Atom + "summary")?.Value.Trim() ?? "";
+                var published = entry.Element(Atom + "published")?.Value;
+                int? year = DateTime.TryParse(published, out var d) ? d.Year : null;
+
+                var pdfUrl = entry.Elements(Atom + "link")
+                    .FirstOrDefault(l => (string?)l.Attribute("title") == "pdf")
+                    ?.Attribute("href")?.Value;
+
+                var primaryCategory = entry.Elements()
+                    .FirstOrDefault(e => e.Name.LocalName == "primary_category")
+                    ?.Attribute("term")?.Value;
+
+                var publication = new Publication
+                {
+                    ExternalId = externalId,
+                    Source = PublicationSource.arxiv,
+                    Type = PublicationType.scientific_article,
+                    Title = title,
+                    Summary = summary,
+                    Year = year,
+                    KnowledgeArea = primaryCategory,
+                    PdfFileUrl = pdfUrl,
+                    CopyrightFlag = false
+                };
+
+                var authorNames = entry.Elements(Atom + "author")
+                    .Select(a => a.Element(Atom + "name")?.Value)
+                    .Where(n => n is not null);
+
+                foreach (var name in authorNames)
+                {
+                    var author = _db.Authors.Local.FirstOrDefault(x => x.Name == name)
+                        ?? await _db.Authors.FirstOrDefaultAsync(x => x.Name == name);
+                    if (author is null)
+                    {
+                        author = new Author { Name = name! };
+                        _db.Authors.Add(author);
+                    }
+                    publication.Authors.Add(author);
+                }
+
+                _db.Publications.Add(publication);
+            }
+
+            await _db.SaveChangesAsync();
+            await Task.Delay(3000); // intervalo mínimo exigido pelo arXiv
+        }
+    }
+}

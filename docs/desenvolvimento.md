@@ -1,0 +1,329 @@
+<!--
+Documento de apoio à redação do artigo (seção de Metodologia/Desenvolvimento).
+Escopo: apenas o tópico "3.1 Tecnologias Utilizadas". Os tópicos "Interface do
+aplicativo" e "Repositório do projeto" são tratados em outro material.
+Documento VIVO: a cada issue implementada, atualizar a subseção correspondente
+e registrar a evolução no apêndice ao final.
+-->
+
+# 3. DESENVOLVIMENTO
+
+Esta seção apresenta o aplicativo desenvolvido, sua interface e as tecnologias
+empregadas. O presente documento detalha exclusivamente o subtópico **3.1
+Tecnologias Utilizadas**; a interface do aplicativo e o repositório do projeto
+são descritos em material próprio.
+
+## 3.1 Tecnologias Utilizadas
+
+O LivreMente é uma plataforma web de leitura que reúne, em um único acervo,
+livros de domínio público (Project Gutenberg, acessados pela API Gutendex) e
+artigos científicos de acesso aberto (repositório arXiv). O sistema foi
+estruturado em duas partes independentes e integradas por contrato: uma **API
+REST** (back-end), responsável pelas regras de negócio e persistência, e uma
+**aplicação de página única (SPA)** (front-end), responsável pela interface.
+As subseções a seguir descrevem, para cada tecnologia adotada, tanto sua
+natureza quanto o modo como foi empregada na implementação.
+
+### 3.1.1 Linguagem, plataforma e estilo de API
+
+O back-end foi desenvolvido em **C#** sobre o **.NET 9** e o framework
+**ASP.NET Core**. Optou-se pelo estilo **Minimal API**, no qual as rotas são
+declaradas de forma enxuta e agrupadas por recurso (`MapGroup`), sem o
+mecanismo de controladores. Cada manipulador de rota é mantido "fino": recebe a
+requisição, delega a lógica a um serviço e traduz o resultado nos códigos HTTP
+adequados. Essa abordagem foi escolhida por reduzir cerimônia em uma API de
+porte pequeno a médio, mantendo a legibilidade.
+
+### 3.1.2 Documentação e contrato da API (OpenAPI/Swagger)
+
+A documentação da API é gerada automaticamente no padrão **OpenAPI**, com
+**Swagger (Swashbuckle)**, disponibilizando uma interface interativa em ambiente
+de desenvolvimento. O contrato OpenAPI cumpre, ainda, papel central na
+integração entre as camadas: é a partir dele que o cliente HTTP do front-end é
+gerado, garantindo que ambos os lados compartilhem os mesmos tipos e rotas.
+
+### 3.1.3 Persistência de dados (PostgreSQL, EF Core e Npgsql)
+
+Os dados são persistidos em um banco relacional **PostgreSQL**, hospedado no
+**Azure Database for PostgreSQL (Flexible Server)**. O acesso se dá pelo
+**Entity Framework Core 9** com o provedor **Npgsql**, adotando a abordagem
+**Database First**: o esquema é definido diretamente no banco e as classes de
+modelo são geradas a partir dele. Recursos nativos do PostgreSQL foram
+explorados, como os **tipos enumerados (enum)** — mapeados no EF Core por meio
+de `HasPostgresEnum` e `MapEnum` — empregados para campos de domínio fechado
+(por exemplo, gênero do usuário, tipo de publicação e fonte do acervo). Do ponto
+de vista de segurança, adotou-se o princípio do **menor privilégio**,
+separando-se o papel de aplicação (com permissões apenas de leitura e escrita de
+dados) do papel administrativo (responsável por alterações de esquema).
+
+### 3.1.4 Organização em camadas (arquitetura)
+
+A API foi organizada segundo uma **arquitetura em camadas pragmática**,
+composta por três responsabilidades bem delimitadas: objetos de transferência de
+dados (*DTOs*), que definem o contrato de entrada e saída sem expor as entidades
+de persistência; serviços, que concentram as regras de negócio e o acesso a
+dados; e *endpoints*, que apenas orquestram a requisição. Como diretriz
+metodológica, padrões de projeto foram adotados com **parcimônia** — somente
+quando o benefício justificasse o custo —, evitando-se abstrações desnecessárias
+como repositórios sobre o EF Core (que já implementa os padrões *Unit of Work* e
+*Repository*).
+
+### 3.1.5 Autenticação e proteção de credenciais (BCrypt)
+
+Para o armazenamento seguro de senhas, utilizou-se o algoritmo **BCrypt**
+(biblioteca *BCrypt.Net-Next*), que aplica *hashing* com sal e fator de custo
+configurável. O algoritmo foi encapsulado por trás de uma abstração
+(`IPasswordHasher`, aplicação do padrão *Strategy*), de modo que sua eventual
+substituição não afete as regras de negócio. Essa tecnologia foi introduzida na
+implementação do cadastro de usuário (RF01): a senha nunca é armazenada em texto
+puro nem retornada nas respostas da API.
+
+No login (RF02), a autenticação emprega **JSON Web Tokens (JWT)**, com a
+biblioteca **JwtBearer** do ASP.NET Core. Após validar as credenciais (conferindo
+a senha contra o *hash*), o sistema emite um **token de acesso** assinado
+(HMAC-SHA256) contendo as *claims* do usuário e uma expiração curta; a geração é
+isolada por uma abstração (`IJwtTokenService`). Para manter a sessão sem reenviar
+a senha, emite-se também um **refresh token** de longa duração, persistido apenas
+como *hash* e **rotacionado** a cada renovação (o token usado é revogado). Por
+segurança, credenciais inválidas retornam sempre a mesma resposta genérica (sem
+revelar qual campo falhou), e contas ainda não confirmadas são bloqueadas no
+login.
+
+### 3.1.6 Envio de e-mail (MailKit e SMTP)
+
+O envio de mensagens de correio eletrônico — utilizado na confirmação de
+cadastro (RN01) — foi implementado sobre o protocolo **SMTP** por meio da
+biblioteca **MailKit**. O recurso foi igualmente abstraído (`IEmailSender`,
+padrão *Strategy*), com duas implementações intercambiáveis por configuração:
+uma de desenvolvimento, que apenas registra a mensagem em log, e uma real, que
+efetua o envio via SMTP. Assim, a troca entre ambiente de teste (serviço de
+captura de e-mails) e ambiente de produção (provedor de envio real) ocorre sem
+qualquer alteração de código, apenas por parâmetros de configuração.
+
+### 3.1.7 Integração com fontes de dados externas (Gutendex e arXiv)
+
+O povoamento do acervo é realizado por uma aplicação de console dedicada, que
+consome as APIs externas do **Gutendex** (catálogo do Project Gutenberg, em
+formato JSON) e do **arXiv** (metadados de artigos, em formato Atom/XML). A
+importação trata paginação, repetição em caso de falha e respeito aos limites de
+requisição das fontes, além de evitar duplicidades por meio de uma chave única
+que combina a fonte e o identificador externo de cada obra. Um dicionário de
+tradução converte o vocabulário de categorias exibido ao usuário nos termos
+efetivamente utilizados por cada fonte, unificando gêneros de livros e áreas de
+conhecimento de artigos. Como os títulos de artigos do arXiv chegam com notação
+matemática em **LaTeX** embutida (por exemplo, delimitadores de fórmula, frações
+e símbolos), que apareceria quebrada na interface e prejudicaria a ordenação
+alfabética, uma rotina de normalização converte essa marcação em texto legível
+antes da gravação — mapeando os símbolos mais comuns para seus equivalentes
+*Unicode* e removendo os comandos remanescentes —, de modo que o acervo
+armazene títulos limpos e ordenáveis.
+
+### 3.1.8 Front-end e geração de cliente a partir do contrato
+
+A interface foi desenvolvida como uma **SPA** em **React** com **TypeScript**,
+empacotada pelo **Vite**. A composição visual utiliza a biblioteca de
+componentes **Material UI (MUI)**; o gerenciamento de formulários e sua
+validação empregam **React Hook Form** e **Zod**; e a comunicação com a API é
+mediada pelo **TanStack Query**. Adotou-se abordagem *contract-first*: a partir
+do contrato **OpenAPI** da API, a ferramenta **orval** gera automaticamente os
+tipos, os *hooks* de requisição e os esquemas de validação, reduzindo a
+divergência entre front-end e back-end.
+
+### 3.1.9 Ferramentas de apoio, versionamento e gestão
+
+O código é versionado com **Git** e hospedado no **GitHub**, onde o
+acompanhamento do trabalho é feito por *issues* vinculadas a um quadro de
+projeto. Segredos de configuração (como a *string* de conexão e credenciais de
+e-mail) são mantidos fora do versionamento, por meio do mecanismo de **User
+Secrets** em desenvolvimento e de variáveis de ambiente em produção.
+
+### 3.1.10 Modelagem das preferências e proteção de dados (LGPD)
+
+As preferências do usuário foram modeladas conforme a cardinalidade de cada
+dado, evitando uma solução única. Preferências multivaloradas de recomendação
+(idiomas, tipos de conteúdo e áreas de conhecimento) seguem o padrão
+**entidade-atributo-valor (EAV)**, em uma tabela de pares tipo/valor; os gêneros
+literários, por serem um vínculo a registros do acervo, usam uma relação
+**muitos-para-muitos**; e as preferências escalares do leitor (tema e
+*toggles* de interface) são simples **colunas** na tabela de usuário. Um mesmo
+*endpoint* de preferências concentra esses dados e adota **atualização parcial
+(merge)**: cada campo é opcional e só é alterado quando enviado, permitindo que
+diferentes telas (perfil e leitor) gravem no mesmo recurso sem sobrescrever umas
+às outras. Um **dicionário de tradução** converte os termos exibidos ao usuário
+no vocabulário das fontes externas, com tradução reversa na leitura.
+
+No tocante à **proteção de dados pessoais (LGPD)**, o cadastro registra o
+consentimento obrigatório de tratamento (com data e hora) e um consentimento
+**opcional** (avisos), este último revogável a qualquer momento. O sistema
+implementa ainda o **direito à eliminação**: a exclusão de conta remove, em uma
+única transação, o usuário e todos os dados vinculados (preferências, sessões de
+leitura, grifos, anotações, consultas e credenciais), garantindo que nenhum
+resíduo permaneça após a solicitação.
+
+### 3.1.11 Recursos de leitura e integrações em tempo de execução
+
+A experiência de leitura concentra um conjunto de recursos que exigiram
+integrações em tempo de execução, distintas da importação do acervo (descrita em
+3.1.7, que ocorre em lote e à parte).
+
+O leitor não obtém os arquivos (EPUB/PDF) diretamente das fontes externas no
+navegador, por duas limitações técnicas: as fontes não emitem os cabeçalhos de
+**compartilhamento de recursos entre origens (CORS)** e, no caso do EPUB sem
+extensão explícita, o leitor de EPUB do front interpretaria a URL como diretório.
+Adotou-se, por isso, um **proxy no servidor**: a API baixa o arquivo da fonte
+(sem a restrição de CORS, com repetição em caso de falha) e o transmite ao front
+pela mesma origem, com o tipo de conteúdo adequado. Para evitar baixar
+repetidamente arquivos grandes — e contornar a limitação de banda das fontes —,
+o proxy mantém um **cache em memória** com *single-flight* (uma única busca na
+origem ainda que haja requisições concorrentes) e, para livros, prefere a
+**variante do EPUB sem imagens** (substancialmente menor); um serviço de segundo
+plano **pré-aquece** o cache dos livros mais populares na inicialização. Por
+decisão de segurança posterior, os *endpoints* de arquivo passaram a **exigir
+autenticação**: como o leitor de EPUB e o quadro (*iframe*) de PDF não enviam o
+cabeçalho de autorização, o front obtém o arquivo por requisição autenticada e o
+entrega ao leitor por uma URL local (*blob*) de mesma origem. A mesma
+infraestrutura de *proxy* com cache serve também as **capas** do acervo,
+permitindo que a interface as processe na mesma origem (por exemplo, para extrair
+a cor predominante da capa na visualização em prateleira).
+
+O progresso de leitura (última página, percentual e marcação manual de página) e
+as **sessões de leitura** (tempo de tela ativa) são persistidos por usuário.
+Como o salvamento é automático e pode ocorrer de forma concorrente, as escritas
+na estante empregam **inserção atômica com resolução de conflito** (`INSERT ...
+ON CONFLICT`), respeitando a unicidade do vínculo usuário/publicação sem recorrer
+a bloqueios. Os **grifos** e as **anotações** — restritos a arquivos EPUB por
+regra de negócio (RN07) — vinculam-se a uma **posição no texto** (referência
+canônica do EPUB, *CFI*), de modo que podem ser reexibidos ao reabrir a obra.
+
+O **dicionário integrado** (RF07) permite consultar o significado de uma palavra
+sem sair da leitura. A consulta é atendida por uma **fonte externa** de
+dicionário, acessada por um cliente HTTP dedicado, com o **idioma derivado da
+publicação** em leitura (e recuo para o inglês quando o idioma não é suportado).
+Apenas o **evento de consulta** é persistido (a palavra e a obra, não o
+significado) e somente quando o leitor consente, por meio de um ajuste de
+preferência (*toggle* de histórico) — concretizando, na prática, o controle do
+usuário sobre os próprios dados. Por depender de uma fonte gratuita e
+intermitente, a consulta foi tornada **resiliente**: falhas transitórias são
+repetidas com recuo progressivo e, quando a fonte primária fica indisponível, o
+sistema recorre a uma **fonte alternativa** (Wiktionary), normalizando ambas ao
+mesmo formato de resposta.
+
+A **estante** do usuário materializa o relacionamento entre leitor e obra,
+registrando o estado de leitura (quero ler, lendo, lido, abandonado) e o
+progresso; as alterações de estado também empregam a **inserção atômica com
+resolução de conflito**, de modo a preservar o progresso já acumulado. A partir
+das sessões de leitura, o sistema deriva as **métricas** apresentadas ao
+usuário — tempo total e por período, sequência de dias consecutivos de leitura
+e um **calendário de frequência** —, obtidas por **agregações** no banco
+(agrupamento por dia e por publicação) calculadas em uma única consulta, de modo
+a evitar o problema de múltiplas consultas em laço (*N+1*).
+
+### 3.1.12 Sistema de recomendação personalizada (aprendizado de máquina)
+
+A recomendação de obras (RF27) foi implementada como **filtragem baseada em
+conteúdo** (*content-based*) com **aprendizado de máquina**. Avaliou-se, como
+alternativa, a **filtragem colaborativa** (abordagem popularizada por serviços de
+*streaming*), descartada por depender de um grande volume de interações entre
+usuários — inviável em uma plataforma nova, situação conhecida como *cold start*
+de sistema; a abordagem colaborativa (por fatoração de matrizes) fica registrada
+como trabalho futuro.
+
+Para a vetorização dos textos adotou-se a biblioteca **ML.NET**. Cada obra é
+representada por um **vetor TF-IDF** (frequência do termo ponderada pela
+frequência inversa nos documentos) construído a partir de seu texto descritivo
+(título, sinopse, gêneros e área), com uso de bigramas e normalização L2. Esses
+vetores são mantidos de forma **esparsa em memória**, para não onerar as
+requisições. Como essa representação **depende apenas do acervo** — que só muda
+quando novas publicações são importadas, e não a cada requisição ou usuário —, o
+índice é calculado **uma única vez** por um serviço de segundo plano e
+**persistido em disco** (o modelo e os vetores); nas reinicializações seguintes
+ele é **recarregado** desse armazenamento e só é **recalculado quando o catálogo
+muda**, o que é verificado por uma **assinatura do corpus**, evitando refazer o
+cálculo a cada reinício do serviço.
+
+O "vetor de gosto" do usuário é o **centroide** (normalizado) dos vetores das
+obras de seu **histórico** (lidas e em leitura), somado a um **pseudo-documento**
+de suas **preferências declaradas** (gêneros e áreas) vetorizado no mesmo
+espaço — combinando, assim, comportamento observado e preferências explícitas. Os
+candidatos (obras fora da estante) são ordenados pela **similaridade de cosseno**
+com esse vetor (equivalente ao produto interno dos vetores normalizados); quando
+não há perfil suficiente, ou enquanto o índice ainda é construído, a lista recai
+sobre a **popularidade** do acervo (*cold start* de usuário).
+
+Como o acervo contém **múltiplas edições e traduções** de uma mesma obra, a
+recomendação **deduplica por obra**: além de excluir o que já está na estante,
+descarta edições repetidas por uma chave de obra (título e autor normalizados) e,
+para edições em **outro idioma** (de título distinto), identifica-as pela **alta
+similaridade de conteúdo** entre obras de um mesmo autor — evitando recomendar à
+pessoa aquilo que, na prática, ela já conhece.
+
+---
+
+## Apêndice — Registro de evolução por issue
+
+*Tabela de controle interno (não necessariamente parte do texto final do
+artigo). A cada issue concluída, adicionar uma linha relacionando o requisito às
+tecnologias empregadas.*
+
+| Issue | Requisito/Regra | Tecnologias e aspectos de implementação |
+|---|---|---|
+| Setup | — | .NET 9, ASP.NET Core (Minimal API), EF Core 9 + Npgsql, PostgreSQL/Azure, Swagger, CORS |
+| Importação do catálogo | — | Aplicação de console; consumo de Gutendex (JSON) e arXiv (Atom/XML); deduplicação por (fonte, id externo) |
+| Endpoints de gênero | — | Arquitetura em camadas (DTOs/Services/Endpoints); paginação; `PreferenceCatalog` |
+| #5 | RF01 — Cadastro de usuário | BCrypt (`IPasswordHasher`, *Strategy*); transação única (usuário + preferências); enum nativo `gender_enum`; validação e códigos HTTP do contrato |
+| #6 | RN01 — Confirmação por e-mail | MailKit/SMTP (`IEmailSender`, *Strategy*); token com *hash* e expiração; confirmação via redirecionamento ao front |
+| #7 | RN03 — Consentimento LGPD | Aceite obrigatório validado no cadastro (erro 400 sem consentimento); registro de data/hora em `users.lgpd_consented_at` |
+| #8 / #9 | RF02 — Login com JWT (+ refresh) | Autenticação por **JWT** (HS256, `Microsoft.AspNetCore.Authentication.JwtBearer`, `IJwtTokenService` — *Strategy*); senha conferida por *hash*; **refresh token** persistido (só o *hash*) com rotação; 401 genérico (anti-enumeração); gate 403 para conta não confirmada |
+| #10 | RF03 — Edição de perfil | Endpoints autenticados (`[Authorize]`) sob `/api/users/me`; identidade do usuário lida do *claim* `sub` do JWT (RN04 por construção, sem IDOR); edição do nome e troca de senha (verifica a senha atual antes de regravar o *hash*); **avatar** enviado por *multipart*, validado por *magic bytes* (PNG/JPG, ≤ 2 MB) e armazenado como `bytea` no banco, servido por endpoint público |
+| #13 | RF29 — Logout | Revogação do refresh token pelo hash e proprietário; JWT obrigatório; testes HTTP 204/401; integrado em `develop` pelo PR #58 |
+| #18 | RF11 — Busca por palavra-chave | EF Core/Npgsql com `unaccent` + `ILIKE` em título/autor; paginação e DTO; integrado pelo PR #52 |
+| #17 | RF10 — Listagem do catálogo | GET público; `CatalogPage`, cards, contagens por tipo, paginação validada, busca opcional, ordenação estável e tradução de gêneros/áreas para slugs; 24 requisições HTTP aprovadas contra PostgreSQL em 07/10/2026; mergeado (PR #60) |
+| #11 | RF04 — Preferências de leitura (EAV) | `GET`/`PUT /api/users/me/preferences` autenticado; modelo **EAV** em `user_preference` (idioma, tipo de conteúdo, área de conhecimento); contrato `{ languages, contentTypes, knowledgeAreas }`; `knowledge_area` gravada traduzida em *archives* (reversão no GET); substituição idempotente por tipo; mergeado (PR #56) |
+| #12 | RF04 — Preferências de gênero (M:N) | `GET`/`PUT /api/users/me/genres` + `DELETE /{genreId}`; relação **M:N** `user_genre`; tradução *slug* ↔ `genre.name` via `PreferenceCatalog` (*fan-out* na escrita, reversão na leitura); substituição por *diff* mínimo; mergeado (PR #57) |
+| — | LGPD — Consentimento e exclusão de conta | `GET`/`PUT /api/users/me/consent` (lê o consentimento; altera o *marketing*, persistido em `users.marketing_consent`); `DELETE /api/users/me` (direito à eliminação) apaga, em transação, todas as tabelas filhas e o usuário; identidade do JWT (RN04); E2E validado contra o banco de dev |
+| RF26 | Preferências do leitor (tema e *toggles*) | Extensão do `/api/users/me/preferences` com `theme` (`light\|sepia\|dark`), `resumeAuto` e `saveDictionary` (colunas em `users`); `PUT` passa a **merge parcial** (campo ausente = não tocado), permitindo perfil (EAV) e leitor gravarem no mesmo recurso sem se sobrescrever; E2E validado contra o banco de dev |
+| #19 | RF12 — Filtros de busca | `type`/`languages`/`genres` no `GET /api/publications`; `CatalogFilterValidation` traduz slugs via `PreferenceCatalog` (400 se inválido); `counts` refletem os filtros **exceto `type`**; AND entre filtros, OR dentro da lista; E2E contra o banco de dev |
+| #20 | RF13 — Detalhes da publicação | `GET /api/publications/{id:int}` público → `PublicationDetailsDto` (metadados + `authors[]` + `genres` slugs + arquivos EPUB/PDF + `publicDomain`); 404 se não existir; tradução de gênero reusada do card; E2E contra o banco de dev |
+| #21 | RF14 — Dados resumidos do card | Coberta pela #17: `PublicationCardDto` (capa/título/ano/autor/gênero/fonte + `id`); capa nula para artigo na projeção do `ListAsync`, sem erro; verificado por E2E (card de livro e de artigo) |
+| #22 | RF17 / RN08 — Última página lida (EPUB) | `PUT /api/reading/{id}/last-page` autenticado; `ReadingService` faz upsert em `shelf` (cria com `status=reading` se ausente, senão atualiza `last_page_read`); só EPUB (`epub_file_url`), senão 422; mapeada a coluna `shelf.status` (drift do scaffolding), sem migração; E2E contra o banco de dev |
+| #23 | RF18 — Retomada de leitura | `GET /api/reading/{id}/last-page` autenticado → `{ lastPageRead: int\|null }`; `GetLastPageAsync` lê `shelf` do par usuário/publicação; null se nunca leu; E2E contra o banco de dev |
+| #24 | RF19 — Percentual lido | `PUT /api/reading/{id}/percentage` autenticado; `SavePercentageAsync` valida EPUB e faz upsert atômico em `shelf.read_percentage`; valor 0–100 (senão 400); não-EPUB 422; E2E contra o banco de dev |
+| #25 | RF20 — Tempo de sessão | Modelado na `reading_session` (histórico por sessão); coluna `active_seconds` (tempo ativo); `POST /api/reading/{id}/session` abre a sessão → `{ sessionId }`; `PUT /api/reading/sessions/{id} { activeSeconds }` é heartbeat/encerramento (grava `active_seconds`, move `end_time`); EPUB e PDF; RN04 (só a própria sessão); E2E contra o banco de dev |
+| — | RF15 / RF16 — Proxy dos arquivos de leitura | `GET /api/reading/{id}/epub` e `/pdf` (posteriormente tornados **autenticados**, ver linha de segurança); busca no servidor via `IHttpClientFactory` (sem CORS, com repetição) e transmite pela mesma origem; **cache em memória + *single-flight*** (`IMemoryCache`, `SemaphoreSlim`), **EPUB sem imagens** (variante menor, com *fallback*) e **pré-aquecimento** dos populares no *startup* (`BackgroundService`); 404/502 `UPSTREAM_ERROR`; verificado no navegador |
+| #26 | RF21 — Marcação manual de página | `PUT`/`GET /api/reading/{id}/bookmark` autenticado; upsert atômico em `shelf.bookmarked_page`; **EPUB e PDF** (sem restrição de formato); validação alinhada ao banco (relaxados os *checks* `bookmarked_page`/`last_page_read` para `>= 0`, 0-based do EPUB — corrige de passagem a 1ª página do #22); E2E contra o banco de dev |
+| #27 | RF22 / RN07 — Criação de grifo (só EPUB) | `POST`/`GET /api/reading/{id}/highlights` autenticado; grava em `highlight` (`excerpt`, `epub_position`=*CFI*, `color`); nova coluna `color` (migração) para persistir a cor do front; não-EPUB → 422 `PUBLICATION_NOT_EPUB`; E2E contra o banco de dev; integração do front verificada no navegador |
+| #28 | RF23 / RN07 — Criação de anotação (só EPUB) | `POST`/`GET /api/reading/{id}/annotations` autenticado; grava em `annotation` (`linked_excerpt`, `content`, `epub_position`); recurso independente do grifo; não-EPUB → 422; sem migração; E2E contra o banco de dev; integração do front verificada no navegador |
+| #29 | RF24 — Listagem de grifos/anotações | `GET /api/reading/{id}/highlights-annotations` autenticado → `{ highlights, annotations }` num único *snapshot* de reabertura; listas vazias (não erro) quando não há nada; reusa as listagens das #27/#28; sem migração; E2E contra o banco de dev |
+| #30 | RF07 — Consulta ao dicionário | `POST /api/dictionary/lookup { word, publicationId }` autenticado → `{ word, phonetic?, meanings }`; **fonte externa** (cliente HTTP dedicado) com idioma derivado da publicação (*fallback* inglês); registra só o **evento** em `word_lookup` e **apenas quando `users.save_dictionary = true`** (RF26); sem verbete → 404 `WORD_NOT_FOUND`, falha na fonte → 502 `DICTIONARY_UNAVAILABLE`; sem migração; E2E contra o banco de dev |
+| #31 | RF08 — Histórico de palavras consultadas | `GET /api/dictionary/history?order=recent\|oldest` autenticado → lista `{ word, consultedAt, publicationId, publicationTitle }`; uma entrada por consulta, com a **obra de origem** (join `word_lookup`→`publication`); ordenação por data de consulta; RN04 (só o próprio usuário); lista vazia (não erro) quando não há histórico; sem migração; E2E contra o banco de dev |
+| #34 | RF08 — Histórico no perfil e definição | `word_lookup` ganha a coluna `definition` (grava a 1ª acepção, respeitando o *toggle* de histórico) exposta no `GET /api/dictionary/history`; seção de histórico também na tela de perfil; migração em `docs/sql` |
+| — | Resiliência — consulta ao dicionário | Repetição com recuo em falhas transitórias e *fallback* para fonte alternativa (Wiktionary) quando a fonte primária fica indisponível; ambas normalizadas ao mesmo DTO |
+| #32 / #33 | RF05 / RF06 / RN05 — Estante do usuário | `GET /api/shelf` (listagem por estado), `PUT /api/shelf/{id}` (define o estado por **upsert atômico** que preserva o progresso), `DELETE /api/shelf/{id}`; reuso do card do catálogo (`PublicationCardMapper`); enum `reading_status_enum` exposto como texto; sem migração; E2E contra o banco de dev |
+| #20 (ext.) | RF13 — Detalhes cientes do usuário | `GET /api/publications/{id}` segue público, mas lê o JWT quando presente e popula estado/progresso/tempo de leitura a partir da estante; `readingTimeMinutes` agrega `reading_session.active_seconds` em minutos |
+| — | Estante — enriquecimento e proxy de capa | `ShelfItemDto` ganha tempo de leitura (agregado por `GROUP BY`, sem *N+1*) e formato (epub/pdf); `GET /api/publications/{id}/cover` público reusa o *proxy* com cache + *single-flight* para servir a capa na mesma origem |
+| — | Segurança — autenticação da leitura | Os *endpoints* de arquivo `epub`/`pdf` passaram a **exigir JWT** (antes públicos); o front obtém o arquivo por requisição autenticada e o entrega ao leitor por URL local (*blob*) de mesma origem; verificado no navegador |
+| #35 | RF09 — Calendário de frequência | `GET /api/reading/calendar?from&to` autenticado; agrega `reading_session` por dia (lista esparsa, só dias com leitura ativa); validação de intervalo (até 366 dias); limites `DateTime` *Unspecified* (Npgsql); E2E contra o banco de dev |
+| #36 | RF27 — Recomendação (content-based, ML.NET) | Filtragem baseada em conteúdo com **ML.NET**: vetores **TF-IDF** (título+sinopse+gêneros+área) em índice esparso em memória (serviço de segundo plano); vetor de gosto = centroide do histórico + pseudo-documento das preferências; similaridade de **cosseno**; *cold start* → popularidade; **deduplicação** por obra e por edição/tradução (chave título+autor e similaridade de conteúdo); E2E contra o banco de dev |
+| — | Recomendação — persistência do índice | O índice (modelo + vetores TF-IDF) deixa de ser reconstruído a cada reinicialização: é calculado uma vez e **persistido em disco**, recarregado nos reinícios e recalculado apenas quando o catálogo muda (verificado por uma **assinatura do corpus**); evita o *refit* redundante a cada *startup*. Gravação atômica; caminho configurável |
+| #37 | RF27 — Métricas de leitura | `GET /api/reading/stats` autenticado → tempo total/hoje/média, **sequência atual e recorde** (dias consecutivos) e dias no mês, agregados da `reading_session` por dia; alimenta os cartões da tela de recomendações; sem migração; E2E contra o banco de dev |
+| #85 | Correção — caracteres especiais nos títulos de artigos | Origem identificada na importação (notação **LaTeX** do arXiv gravada verbatim), que quebrava a exibição e a ordenação A-Z (feita no banco, server-side); `TitleSanitizer` normaliza a marcação para texto *Unicode* legível, aplicado no `ArxivImporter` (obras futuras) e em um **backfill** idempotente das linhas existentes (`--clean-titles`, apenas DML, sem migração/reimportação); verificado no navegador (sem LaTeX, ordenação consistente) |
+| #89 | Correção — filtro por área de conhecimento (RF12) | Origem identificada na **query**, não na importação: o filtro de artigos comparava a categoria completa do arXiv (`math.AG`, `cs.AI`) com os prefixos de *archive* (`math`, `cs`), casando apenas os sem subcategoria — vários de física —, de modo que só "Física" retornava; a correção passa a casar pelo *archive* (igualdade exata ou prefixo), numa forma traduzível para SQL; cada área volta a retornar seus artigos; sem migração, sem reimportação, sem mudança no front |
+| — | Refatoração — helpers de acesso a dados (DRY) | Consolidação de duas duplicações, sem mudança de esquema/contrato/comportamento: o utilitário de *timestamp* UTC "sem fuso" (exigência do Npgsql para `timestamp without time zone`), antes repetido em três serviços, vira ponto único (`Common/Clock`); e o *upsert* atômico da estante (`INSERT … ON CONFLICT … DO UPDATE`), repetido em quatro lugares (auto-saves do leitor e estado da estante), vira um *helper* dedicado (`Common/ShelfUpsert`) com o nome da coluna vindo de uma enumeração com lista branca (sem concatenar entrada; valores sempre parametrizados), preservando a atomicidade |
+| — | Refatoração — separação do serviço de arquivos de leitura | Melhoria de coesão: o serviço do épico de Leitura acumulava progresso/notas/sessão/métricas **e** o *proxy same-origin* dos arquivos (EPUB/PDF) e capas (download no servidor, cache, *single-flight*, *retry*). O *proxy* — parte autocontida e de baixo acoplamento — foi extraído para um serviço próprio (`ReadingFileService`), deixando o serviço de leitura focado; *endpoints* e o pré-aquecimento de cache passam a depender do novo serviço. Sem mudança de contrato, esquema ou comportamento |
+
+Na listagem, `relevance` utiliza popularidade como critério inicial. A rota
+`/api/publications/search` é um alias público de `/api/publications`, com o
+mesmo contrato, paginação, validação e ordenação. Aceita `query` como alternativa
+a `q` (que tem precedência). Substitui a resposta antiga pelo `CatalogPage`.
+A implementação da #17 preserva espaços e
+hífens e trata os metacaracteres de `LIKE` como texto literal. Não há mudança
+de esquema. Os filtros pertencem à #19; a integração do front (OpenAPI/orval,
+rota de busca e remoção do mock) permanece como follow-up.
+
+Status conferido no GitHub em 07/10/2026 somente para as issues trabalhadas
+nesta sequência: #13 e #18 fechadas; #17 aberta, aguardando revisão e merge.
+Após a conversão de `/search` em alias, foram comparadas as respostas das duas
+rotas com e sem busca, ordenação/paginação e precedência de `q` sobre `query`;
+também foi confirmado o retorno 400 para `pageSize=51`. Build Release aprovado.
+O script auxiliar Node foi removido; o registro das 24 requisições anteriores
+é histórico. A validação manual pode ser repetida pelo Swagger.
