@@ -25,10 +25,11 @@ referenciados por código: **RFxx** (funcional), **RNxx** (regra de negócio).
 
 ## 2. Stack
 
-**Back-end:** C# / .NET 9 · ASP.NET Core **Minimal API** · EF Core 9 + **Npgsql**
-(PostgreSQL) · **Database First** · Swagger/OpenAPI · BCrypt.Net-Next (hash de
+**Back-end:** C# / **.NET 10 (LTS)** · ASP.NET Core **Minimal API** · EF Core 10 + **Npgsql**
+(PostgreSQL) · **Database First** · Swagger/OpenAPI (Swashbuckle) · BCrypt.Net-Next (hash de
 senha) · MailKit (SMTP). Projeto de importação à parte: `LivreMente.Importer`
-(console).
+(console). _(Migrado de .NET 9 → 10 — ver "Status por issue"; o .NET 9 é STS e saiu de
+suporte. O App Service só oferece .NET 10/11, então o runtime fica alinhado.)_
 
 **Front-end:** React + TypeScript · Vite · Material UI (MUI) · React Router ·
 React Hook Form + Zod · TanStack Query · **orval** (gera cliente HTTP a partir do
@@ -115,9 +116,11 @@ corresponder aos `value` das opções do front.**
   `cd LivreMente.Api && dotnet run --urls http://localhost:5091`
 - **Front:** `pnpm dev` (Vite em `localhost:5173`); há **proxy** de `/api` para
   `http://localhost:5091` no `vite.config.ts` (sem CORS).
-- **E-mail:** `Email:Provider` = `Logging` (dev, imprime o link no log) ou `Smtp`
-  (real, via MailKit); credenciais SMTP em `Email:Smtp:*` (User Secrets / env).
-  Ver `README.md` → "Configuração de e-mail".
+- **E-mail:** `Email:Provider` = `Logging` (dev, imprime o link no log), `Smtp`
+  (real, via MailKit; credenciais em `Email:Smtp:*`) ou **`Acs`** (real, via **Azure
+  Communication Services** / SDK `Azure.Communication.Email`; `Email:Acs:ConnectionString`
+  + `Email:Acs:FromAddress`, o MailFrom do domínio azurecomm). Segredos em User Secrets /
+  env / Key Vault, nunca no appsettings. Ver `README.md` → "Configuração de e-mail".
 - **Importar catálogo:** `cd LivreMente.Importer && dotnet run` (demorado; ver README).
 
 ## 8. Convenções de contribuição
@@ -152,6 +155,10 @@ corresponder aos `value` das opções do front.**
 - Follow-ups: reenvio de confirmação; provedor SMTP real em produção (só configuração).
 
 **Implementado / aguardando revisão e merge:**
+
+- **Migração .NET 9 → .NET 10 (LTS) — preparação para deploy:** o .NET 9 é STS e **saiu de suporte** (maio/2026), e o Azure App Service só oferece **.NET 10/11** na pilha de runtime — manter o 9 exigiria container/self-contained só para contornar a versão. `TargetFramework` de **`LivreMente.Api`** e **`LivreMente.Importer`** → `net10.0`; pacotes `Microsoft.*`/`Npgsql.EntityFrameworkCore.PostgreSQL` → **`10.0.0`** (EF Core 10). **Removido `Microsoft.AspNetCore.OpenApi`** (estava **sem uso** — o Swagger é só Swashbuckle via `AddSwaggerGen`/`UseSwagger`): no .NET 10 esse pacote puxava `Microsoft.OpenApi` **2.0**, cujos namespaces achatados quebravam o bloco `AddSecurityDefinition`/`OpenApiSecurityScheme` do `Program.cs` (`CS0234` em `Microsoft.OpenApi.Models`); sem ele, o Swashbuckle resolve `Microsoft.OpenApi` **1.6.23** e o código do Swagger fica **intacto**. **Advisory transitivo** (`System.Security.Cryptography.Pkcs` via MailKit→MimeKit, `NU1903` alto) neutralizado com `PackageReference` explícito na patch **`10.0.15`** (standalone — só copia o DLL, sem exigir runtime novo no host). CI atualizado (`.github/workflows/backend-ci.yml`: `setup-dotnet` `9.0.x` → **`10.0.x`**). **Database First sem EF Migrations → a troca EF 9→10 não gera migração**; o mapeamento de enum do Npgsql (`MapEnum` no `UseNpgsql` + `HasPostgresEnum`) segue idêntico; **sem mudança de esquema, contrato nem comportamento**. SDK 10.0.404 usado no build. **Build Release verde: 0 erros**, só os 2 avisos pré-existentes (`CS8604` do SMTP e `CS0436` dos dois `Program` top-level Api/Importer). _Smoke/E2E logado a cargo da Amanda (banco dá timeout no workspace do agente — firewall do Azure)._
+
+- **Provedor de e-mail ACS (Azure Communication Services) — entrega real em produção:** terceiro provedor na Strategy `IEmailSender`, ao lado de `Logging` (dev) e `Smtp` (MailKit). Novo **`Email/AcsEmailSender.cs`** usa o SDK **`Azure.Communication.Email` 1.1.0** (adicionado ao `.csproj`): envia pelo recurso **ACS** com a connection string (`Email:Acs:ConnectionString`) e o remetente MailFrom do **domínio azurecomm grátis** (`Email:Acs:FromAddress`), `WaitUntil.Started` (enfileira e retorna; erros de credencial/remetente surgem na hora, sem bloquear a resposta). Selecionado por **`Email:Provider=Acs`** no `Program.cs` (`Acs` → `AcsEmailSender`; `Smtp`/`Logging` inalterados). **Motivo:** o Mailtrap Sandbox só *captura* e-mail (não entrega); para cadastro de usuários reais é preciso entrega real, e o ACS entrega **sem domínio próprio** (subdomínio azurecomm, SPF/DKIM prontos) e **sem SMTP/registro de app no Entra** (ao contrário do SMTP do ACS) — autenticação por uma única connection string. **Segredo** `Email--Acs--ConnectionString` no Key Vault (substitui o `Email--Smtp--Password` no caminho de produção); `Email:Acs:FromAddress` é não-secreto (App Settings). **Sem migração, sem mudança de contrato nem de esquema.** Build Release verde (só o `CS8604` pré-existente do SMTP). _Envio real verificado a cargo da Amanda (depende dos recursos ACS criados no portal)._ Ver `docs/deploy-azure.md` → Passo 5.
 
 - **Refatoração — proxy de arquivo/capa extraído do `ReadingService`, branch `refactor/extrai-proxy-arquivo-capa`:** o `ReadingService` (479 linhas) concentrava o épico de Leitura **e** o proxy same-origin de EPUB/PDF/capa (download no servidor + cache + single-flight + retry). O proxy — parte autocontida e de baixo acoplamento — virou **`IReadingFileService`/`ReadingFileService`** (`GetFileAsync`/`GetCoverAsync` + helpers `PreferNoImagesEpub`/`NoImagesFirst`/`DownloadFirstAsync`/`DownloadWithRetryAsync` + `FileGates` + deps `IHttpClientFactory`/`IMemoryCache`/`IConfiguration`). Os tipos de arquivo (`PublicationFileKind`/`GetFileStatus`/`PublicationFileResult`) migraram para `IReadingFileService.cs` (mesma namespace — consumidores não mudaram `using`). O `ReadingService` fica focado em progresso/notas/sessão/stats (**309 linhas**, construtor só com `DbContext`). Chamadores atualizados — `ReadingEndpoints` (`/epub`,`/pdf`), `PublicationEndpoints` (`/cover`) e `PopularBooksCacheWarmer` injetam `IReadingFileService`; novo `AddScoped<IReadingFileService, ReadingFileService>()` no `Program.cs`. **Sem mudança de contrato, esquema nem comportamento.** Build Release OK (só o aviso CS8604 pré-existente). _E2E logado a cargo da Amanda (banco dá timeout no workspace do agente)._
 
