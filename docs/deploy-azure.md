@@ -10,6 +10,12 @@ Escopo pensado como **protótipo acadêmico de baixo custo** (TCC), com os ponto
 para produção sinalizados em cada passo. O banco já está no **Azure Database for PostgreSQL
 Flexible Server**, então o plano encaixa o restante no mesmo tenant/região.
 
+> **Status: deploy concluído em 2026-11-11.** Backend no App Service **`livremente-api`** e
+> front no Static Web App **`livremente-web`** (ambos com CI/CD por push na `main`), banco
+> **`livre_mente_prod`**, segredos no Key Vault **`livremente-kv`**, e-mail real por ACS.
+> Validado ponta a ponta (cadastro → e-mail → confirmação → login → catálogo). Os passos
+> abaixo registram o caminho percorrido e servem de referência para redeploy/manutenção.
+
 ---
 
 ## 1. Mapa dos serviços Azure
@@ -155,6 +161,16 @@ popular com o Importer, para não misturar dados de teste com a demonstração.
 5. **Deploy do código.** Sem Dockerfile, publique o resultado de `dotnet publish -c Release`
    direto (via GitHub Actions no Passo 9, ou `az webapp deploy` para o primeiro teste). Não
    precisa containerizar.
+   - ⚠️ **Pegadinha do startup-file (vivida no deploy de 2026-11-11):** o workflow do
+     *Deployment Center* vem com `dotnet publish` **sem apontar o projeto** — num repo com
+     2 projetos (`LivreMente.Api` + `LivreMente.Importer`) isso publica os **dois** no
+     `wwwroot` (dois `*.runtimeconfig.json`). O container Linux não sabe qual rodar, cai no
+     **app padrão** (página "waiting for your content" com `Server: Kestrel`) e todo `/api/*`
+     dá 404. **Dois consertos, ambos aplicados:** (a) o workflow publica só
+     `LivreMente.Api/LivreMente.Api.csproj`; (b) como o OneDeploy **não limpa** o `wwwroot`,
+     os arquivos do Importer do 1º deploy ficaram lá — fixar o comando de inicialização
+     resolve em definitivo: `az webapp config set -g <rg> -n <app> --startup-file "dotnet LivreMente.Api.dll"`.
+     Diagnóstico pelo `az webapp log tail` (mostra o warning `Found files: '...runtimeconfig.json...'`).
 6. **Índice de recomendação em disco:** o `/home` do App Service é **persistente**, então o
    `RecommendationIndexStore` recarrega o `model.zip`/`index.bin` sem refazer o TF-IDF. Se o
    cache sumir (1ª subida, troca de plano), o builder apenas **reconstrói no startup**

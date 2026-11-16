@@ -136,6 +136,7 @@ corresponder aos `value` das opções do front.**
 ## 9. Status por issue (ATUALIZAR A CADA ISSUE)
 
 **Concluído:**
+- **Deploy em produção na Azure (2026-11-11):** backend no **App Service `livremente-api`** (Linux B1, `DOTNETCORE|10.0`, Always On) e front no **Static Web App `livremente-web`** (Free), ambos com **CI/CD por GitHub Actions a cada push na `main`** (produção = `main`; integração segue na `develop`). Banco de produção **`livre_mente_prod`** (criado por `TEMPLATE` do dev); segredos no **Key Vault `livremente-kv`** referenciados nas App Settings; e-mail real por **ACS** (domínio `livrementeapp.com.br`). CORS do backend libera a origem do SWA (`Cors__AllowedOrigins__0`) e o front injeta `VITE_API_URL` no build. **Pegadinha:** como o `wwwroot` ficou com os 2 projetos (API + Importer → dois `runtimeconfig.json`) e o OneDeploy não limpa, foi preciso fixar o **startup-file** `dotnet LivreMente.Api.dll` no App Service (o workflow já publica só `LivreMente.Api`). Validado ponta a ponta (cadastro → e-mail ACS → confirmação → login → catálogo). Detalhes em `docs/deploy-azure.md`.
 - Setup: API, EF Core/Npgsql, PostgreSQL/Azure, Swagger, CORS, pipeline de CI.
 - Importação do catálogo (Gutendex + arXiv) via `LivreMente.Importer`.
 - Endpoints de gênero (`GET /api/genres`, `/{id}`, `/{id}/publications`) — molde da arquitetura em camadas.
