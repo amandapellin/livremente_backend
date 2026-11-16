@@ -26,7 +26,7 @@ natureza quanto o modo como foi empregada na implementação.
 
 ### 3.1.1 Linguagem, plataforma e estilo de API
 
-O back-end foi desenvolvido em **C#** sobre o **.NET 9** e o framework
+O back-end foi desenvolvido em **C#** sobre o **.NET 10** e o framework
 **ASP.NET Core**. Optou-se pelo estilo **Minimal API**, no qual as rotas são
 declaradas de forma enxuta e agrupadas por recurso (`MapGroup`), sem o
 mecanismo de controladores. Cada manipulador de rota é mantido "fino": recebe a
@@ -46,7 +46,7 @@ gerado, garantindo que ambos os lados compartilhem os mesmos tipos e rotas.
 
 Os dados são persistidos em um banco relacional **PostgreSQL**, hospedado no
 **Azure Database for PostgreSQL (Flexible Server)**. O acesso se dá pelo
-**Entity Framework Core 9** com o provedor **Npgsql**, adotando a abordagem
+**Entity Framework Core 10** com o provedor **Npgsql**, adotando a abordagem
 **Database First**: o esquema é definido diretamente no banco e as classes de
 modelo são geradas a partir dele. Recursos nativos do PostgreSQL foram
 explorados, como os **tipos enumerados (enum)** — mapeados no EF Core por meio
@@ -89,16 +89,19 @@ segurança, credenciais inválidas retornam sempre a mesma resposta genérica (s
 revelar qual campo falhou), e contas ainda não confirmadas são bloqueadas no
 login.
 
-### 3.1.6 Envio de e-mail (MailKit e SMTP)
+### 3.1.6 Envio de e-mail (MailKit, SMTP e Azure Communication Services)
 
-O envio de mensagens de correio eletrônico — utilizado na confirmação de
-cadastro (RN01) — foi implementado sobre o protocolo **SMTP** por meio da
-biblioteca **MailKit**. O recurso foi igualmente abstraído (`IEmailSender`,
-padrão *Strategy*), com duas implementações intercambiáveis por configuração:
-uma de desenvolvimento, que apenas registra a mensagem em log, e uma real, que
-efetua o envio via SMTP. Assim, a troca entre ambiente de teste (serviço de
-captura de e-mails) e ambiente de produção (provedor de envio real) ocorre sem
-qualquer alteração de código, apenas por parâmetros de configuração.
+O envio de mensagens de correio eletrônico, utilizado na confirmação de
+cadastro (RN01), foi abstraído por uma interface (`IEmailSender`, padrão
+*Strategy*), com implementações intercambiáveis por configuração. Em
+desenvolvimento, uma implementação apenas registra a mensagem em log. Para o
+envio real há duas opções: o protocolo **SMTP**, por meio da biblioteca
+**MailKit**, e o **Azure Communication Services (ACS)**, por meio de seu SDK.
+Em produção adota-se o ACS, que entrega as mensagens sem exigir domínio próprio
+nem servidor SMTP, autenticando-se por uma única cadeia de conexão. Dessa forma,
+a troca entre registrar em log, capturar em um serviço de testes e entregar em
+produção ocorre sem qualquer alteração de código, apenas por parâmetros de
+configuração.
 
 ### 3.1.7 Integração com fontes de dados externas (Gutendex e arXiv)
 
@@ -267,7 +270,7 @@ tecnologias empregadas.*
 
 | Issue | Requisito/Regra | Tecnologias e aspectos de implementação |
 |---|---|---|
-| Setup | — | .NET 9, ASP.NET Core (Minimal API), EF Core 9 + Npgsql, PostgreSQL/Azure, Swagger, CORS |
+| Setup | — | .NET 10, ASP.NET Core (Minimal API), EF Core 10 + Npgsql, PostgreSQL/Azure, Swagger, CORS |
 | Importação do catálogo | — | Aplicação de console; consumo de Gutendex (JSON) e arXiv (Atom/XML); deduplicação por (fonte, id externo) |
 | Endpoints de gênero | — | Arquitetura em camadas (DTOs/Services/Endpoints); paginação; `PreferenceCatalog` |
 | #5 | RF01 — Cadastro de usuário | BCrypt (`IPasswordHasher`, *Strategy*); transação única (usuário + preferências); enum nativo `gender_enum`; validação e códigos HTTP do contrato |
@@ -310,6 +313,8 @@ tecnologias empregadas.*
 | #89 | Correção — filtro por área de conhecimento (RF12) | Origem identificada na **query**, não na importação: o filtro de artigos comparava a categoria completa do arXiv (`math.AG`, `cs.AI`) com os prefixos de *archive* (`math`, `cs`), casando apenas os sem subcategoria — vários de física —, de modo que só "Física" retornava; a correção passa a casar pelo *archive* (igualdade exata ou prefixo), numa forma traduzível para SQL; cada área volta a retornar seus artigos; sem migração, sem reimportação, sem mudança no front |
 | — | Refatoração — helpers de acesso a dados (DRY) | Consolidação de duas duplicações, sem mudança de esquema/contrato/comportamento: o utilitário de *timestamp* UTC "sem fuso" (exigência do Npgsql para `timestamp without time zone`), antes repetido em três serviços, vira ponto único (`Common/Clock`); e o *upsert* atômico da estante (`INSERT … ON CONFLICT … DO UPDATE`), repetido em quatro lugares (auto-saves do leitor e estado da estante), vira um *helper* dedicado (`Common/ShelfUpsert`) com o nome da coluna vindo de uma enumeração com lista branca (sem concatenar entrada; valores sempre parametrizados), preservando a atomicidade |
 | — | Refatoração — separação do serviço de arquivos de leitura | Melhoria de coesão: o serviço do épico de Leitura acumulava progresso/notas/sessão/métricas **e** o *proxy same-origin* dos arquivos (EPUB/PDF) e capas (download no servidor, cache, *single-flight*, *retry*). O *proxy* — parte autocontida e de baixo acoplamento — foi extraído para um serviço próprio (`ReadingFileService`), deixando o serviço de leitura focado; *endpoints* e o pré-aquecimento de cache passam a depender do novo serviço. Sem mudança de contrato, esquema ou comportamento |
+| — | Infraestrutura — migração para .NET 10 (LTS) | Atualização de `LivreMente.Api` e `LivreMente.Importer` de .NET 9 para **.NET 10 (LTS)**, com os pacotes EF Core e Npgsql na linha 10; sem mudança de esquema, contrato ou comportamento (Database First, mesmo mapeamento de enum); fluxo de CI atualizado. Alinha o *runtime* ao Azure App Service, que disponibiliza .NET 10 |
+| — | Envio de e-mail — provedor Azure Communication Services | Terceira implementação de `IEmailSender` (`AcsEmailSender`, SDK `Azure.Communication.Email`), ao lado de log (desenvolvimento) e SMTP/MailKit; entrega real em produção sem domínio próprio nem servidor SMTP, autenticada por cadeia de conexão (guardada no Key Vault); selecionada por `Email:Provider=Acs`, sem mudança de código |
 
 Na listagem, `relevance` utiliza popularidade como critério inicial. A rota
 `/api/publications/search` é um alias público de `/api/publications`, com o

@@ -6,15 +6,17 @@ Repositório do frontend: [livremente](https://github.com/amandapellin/livrement
 
 ## Tecnologias
 
-- ASP.NET Core (C#)
+- ASP.NET Core Minimal API (C#, **.NET 10 LTS**)
 - Entity Framework Core + Npgsql (driver PostgreSQL), abordagem **Database First**
 - PostgreSQL (hospedado no Azure Database for PostgreSQL Flexible Server)
 - Autenticação via JWT
+- Envio de e-mail abstraído por `IEmailSender`: Azure Communication Services (produção), SMTP ou log (desenvolvimento)
 - OpenAPI/Swagger para documentação da API
+- Hospedagem em produção no Azure App Service, com CI/CD por GitHub Actions (ver seção [Deploy](#deploy-produção))
 
 ## Pré-requisitos
 
-- [.NET SDK 9 (LTS)](https://dotnet.microsoft.com/download) ou superior
+- [.NET SDK 10 (LTS)](https://dotnet.microsoft.com/download) ou superior
 - Acesso ao servidor PostgreSQL do projeto no Azure (peça a credencial de aplicação a quem já configurou o banco — não é a mesma senha do administrador do Azure)
 - [pgAdmin](https://www.pgadmin.org/) (opcional, útil para inspecionar o banco diretamente)
 
@@ -82,7 +84,12 @@ Visão geral por recurso. O Swagger (`/swagger`) é a referência completa e sem
 | **Usuário** (`/api/users/me`, autenticado) | `GET`/`PUT /me`, `PATCH /me/password`, `PUT /me/avatar`, `GET`/`PUT /me/preferences`, `GET`/`PUT /me/genres` + `DELETE /me/genres/{id}`, `GET`/`PUT /me/consent`, `DELETE /me` | Identidade lida do JWT (RN04 por construção); preferências cobrem EAV (idioma/tipo/área), gênero (M:N) e leitor (tema/*toggles*); consentimento e exclusão de conta (LGPD) |
 | **Avatar público** (`/api/users/{id}/avatar`) | `GET` | Serve a imagem (anônimo) |
 | **Gêneros** (`/api/genres`) | `GET /`, `GET /{id}`, `GET /{id}/publications` | Catálogo de gêneros e publicações por gênero |
-| **Publicações/Catálogo** (`/api/publications`) | `GET /` (listagem com busca/paginação/*counts*), `GET /search` (alias) | Busca por título/autor com `unaccent`; filtros e ordenação em evolução |
+| **Publicações/Catálogo** (`/api/publications`) | `GET /` (listagem com busca/paginação/*counts*), `GET /search` (alias), `GET /{id}`, `GET /{id}/cover` | Busca por título/autor com `unaccent`; filtros e ordenação; detalhes da obra; proxy de capa |
+| **Leitura** (`/api/reading`, autenticado) | `GET /{id}/epub` e `/pdf` (proxy), progresso (`last-page`, `percentage`, `bookmark`), sessões (`session`), grifos/anotações (`highlights`, `annotations`), `calendar`, `stats` | Proxy *same-origin* dos arquivos (EPUB/PDF) com cache; salvamento de posição, grifos, anotações, tempo de leitura e frequência |
+| **Estante** (`/api/shelf`, autenticado) | `GET /` (filtro por estado), `PUT /{id}` (estado), `DELETE /{id}` | Organização das obras por estado (RF05/RF06) |
+| **Dicionário** (`/api/dictionary`, autenticado) | `POST /lookup`, `GET /history` | Consulta a fonte externa; histórico opcional de palavras |
+| **Recomendações** (`/api/recommendations`, autenticado) | `GET /` | Recomendação *content-based* (TF-IDF) com *cold start* por popularidade |
+| **Suporte** (`/api/support`) | `POST /contact` | Formulário de contato (público, com *rate limit* e honeypot) |
 
 ## Variáveis/segredos necessários
 
@@ -91,13 +98,17 @@ Visão geral por recurso. O Swagger (`/swagger`) é a referência completa e sem
 | `ConnectionStrings:DefaultConnection` | User Secrets (dev) / variável de ambiente (produção) | String de conexão do PostgreSQL |
 | `Jwt:Key` | User Secrets (dev) / variável de ambiente (produção) | Chave usada para assinar os tokens JWT |
 | `Jwt:Issuer` / `Jwt:Audience` | `appsettings.json` (não sensível) | Metadados do token JWT |
-| `Email:Provider` | `appsettings.json` (dev: `Logging`) / variável de ambiente (prod: `Smtp`) | Seleciona o provedor de e-mail sem mudar código |
-| `Email:Smtp:Host` / `Port` / `Username` / `Password` / `FromAddress` / `FromName` | User Secrets (dev/staging) / variável de ambiente (produção) | Credenciais SMTP quando `Email:Provider = Smtp` |
+| `Email:Provider` | `appsettings.json` (dev: `Logging`) / variável de ambiente (prod: `Acs`) | Seleciona o provedor de e-mail sem mudar código: `Acs`, `Smtp` ou `Logging` |
+| `Email:Acs:ConnectionString` | Key Vault (prod) | Connection string do Azure Communication Services quando `Email:Provider = Acs` |
+| `Email:Acs:FromAddress` | variável de ambiente (prod) | Remetente MailFrom do domínio ACS (ex.: `DoNotReply@<domínio>.azurecomm.net`) |
+| `Email:Smtp:Host` / `Port` / `Username` / `Password` / `FromAddress` / `FromName` | User Secrets (dev/staging) / variável de ambiente | Credenciais SMTP quando `Email:Provider = Smtp` |
+| `Support:Email` | `appsettings.json` / variável de ambiente | Caixa de destino do formulário de contato (`POST /api/support/contact`) |
+| `Cors:AllowedOrigins:0` | variável de ambiente (produção) | Origem do front liberada no CORS (URL do Static Web App) |
 | `App:FrontendBaseUrl` / `App:PublicApiBaseUrl` | `appsettings.json` por ambiente | URLs base do link de confirmação e do redirect pós-confirmação |
 
 ## Configuração de e-mail (confirmação de cadastro)
 
-O envio de e-mail (RN01) é abstraído por `IEmailSender`; a implementação é escolhida pela chave `Email:Provider`, **sem mudança de código** — a mesma build roda nos três ambientes, mudando só a configuração. Segredos (usuário/senha SMTP) **nunca** vão no `appsettings.json`: use User Secrets em dev e variáveis de ambiente em produção.
+O envio de e-mail (RN01) é abstraído por `IEmailSender`; a implementação é escolhida pela chave `Email:Provider` (`Acs`, `Smtp` ou `Logging`), **sem mudança de código** — a mesma build roda em todos os ambientes, mudando só a configuração. Em **produção** o provedor é o **Azure Communication Services (`Acs`)**; em desenvolvimento, `Logging` (padrão) ou `Smtp`. Segredos (connection string do ACS, usuário/senha SMTP) **nunca** vão no `appsettings.json`: use User Secrets em dev e variáveis de ambiente / Key Vault em produção.
 
 > Copie sempre Host/Port/Username/Password **da tela de SMTP do Mailtrap** (é a fonte da verdade; os valores abaixo são o formato esperado).
 
@@ -125,33 +136,43 @@ dotnet user-secrets set "Email:Smtp:FromName" "LivreMente"
 
 4. Cadastre um usuário: o e-mail aparece no inbox do Mailtrap (no sandbox o `FromAddress` pode ser qualquer um — é apenas capturado).
 
-### 3. Produção (demo acadêmica) — Mailtrap **Email Sending** (plano free)
+### 3. Produção — Azure Communication Services (ACS)
 
-Produto **diferente** do sandbox: aqui o e-mail é **entregue de verdade**.
+Em produção o e-mail é **entregue de verdade** pelo **Azure Communication Services (Email)**, via SDK `Azure.Communication.Email` (`AcsEmailSender`). Ele entrega **sem domínio próprio** (usa um subdomínio `azurecomm` grátis, com SPF/DKIM prontos) e **sem SMTP** — a autenticação é por uma única connection string.
 
-1. No Mailtrap, vá em **Email Sending → Sending Domains**.
-2. Sem domínio próprio, use o **domínio de demonstração** que o Mailtrap oferece (algo como `demomailtrap.co`): ele entrega **apenas para o e-mail da própria conta**, o que basta para demonstrar o fluxo. (Para enviar a qualquer destinatário, seria preciso verificar um domínio seu com registros SPF/DKIM/DMARC.)
-3. Em **SMTP/API Settings** do Email Sending, copie Host / Username / Password.
-4. Configure por **variável de ambiente** no serviço de deploy (não User Secrets), usando `__` para aninhar as chaves:
+1. No portal do Azure, crie um recurso **Communication Services** e um **Email Communication Service** com o domínio grátis (`azurecomm`); conecte o domínio ao recurso de Communication Services.
+2. Guarde a **connection string** do recurso no **Key Vault** (segredo `Email--Acs--ConnectionString`) e referencie-a nas App Settings do App Service.
+3. Configure as variáveis de ambiente (no App Service; `__` aninha as chaves):
 
 ```bash
-Email__Provider=Smtp
-Email__Smtp__Host=live.smtp.mailtrap.io
-Email__Smtp__Port=587
-Email__Smtp__Username=<username do Email Sending>
-Email__Smtp__Password=<token/senha do Email Sending>
-Email__Smtp__FromAddress=no-reply@demomailtrap.co   # deve pertencer ao domínio (demo ou verificado)
-Email__Smtp__FromName=LivreMente
+Email__Provider=Acs
+Email__Acs__ConnectionString=<referência ao segredo do Key Vault>
+Email__Acs__FromAddress=DoNotReply@<guid>.azurecomm.net   # MailFrom do domínio ACS
 ```
 
-5. Ajuste também `App:PublicApiBaseUrl` e `App:FrontendBaseUrl` para as URLs públicas do deploy — senão o link de confirmação e o redirect pós-confirmação apontam para `localhost`.
+4. Ajuste também `App:PublicApiBaseUrl` e `App:FrontendBaseUrl` para as URLs públicas do deploy — senão o link de confirmação e o redirect pós-confirmação apontam para `localhost`.
 
-> O `FromAddress` **precisa** pertencer ao domínio (de demonstração ou verificado) no Email Sending; caso contrário o envio é recusado. No sandbox essa exigência não existe.
+> O `Email:Acs:FromAddress` é **não sensível** (vai nas App Settings); apenas a connection string é segredo (Key Vault). O passo a passo completo está em [`docs/deploy-azure.md`](docs/deploy-azure.md) (Passo 5). Alternativamente, para entrega real via SMTP, o Mailtrap **Email Sending** também atende com `Email:Provider = Smtp`.
+
+## Deploy (produção)
+
+A aplicação está publicada no Azure, com **CI/CD por GitHub Actions a cada push na `main`** (integração segue na `develop`):
+
+- **API:** Azure App Service (Linux, plano B1, runtime `.NET 10`), *startup* `dotnet LivreMente.Api.dll`.
+- **Banco de produção:** `livre_mente_prod` no mesmo PostgreSQL Flexible Server.
+- **Segredos:** Azure Key Vault (connection string do banco, `Jwt:Key`, connection string do ACS), referenciados nas App Settings.
+- **E-mail:** Azure Communication Services (`Email:Provider=Acs`).
+- **Front:** Azure Static Web Apps; o CORS do backend libera a origem do SWA (`Cors__AllowedOrigins__0`).
+- **Observabilidade:** Application Insights.
+
+O passo a passo completo (serviços, variáveis de produção e pontos de atenção) está em [`docs/deploy-azure.md`](docs/deploy-azure.md).
 
 ## Fluxo de contribuição
 
-- Branches: `feature/rf01-cadastro-usuario` (código do requisito + descrição curta)
-- Pull requests devem referenciar a issue correspondente (`Closes #12`) e passar por revisão da outra desenvolvedora antes do merge
+- Branches: `feat/<n>-descricao` (n = número da issue) a partir de `develop`
+- Pull requests referenciam a issue correspondente (`Closes #N`) e passam por revisão da outra desenvolvedora antes do merge
+- A cada pull request, os workflows de CI (GitHub Actions: build e análise de segurança CodeQL) são executados automaticamente
+- Integração na `develop`; a `main` é produção e dispara o deploy automático
 - Board de acompanhamento: [Project "Livremente"](https://github.com/users/amandapellin/projects/3)
 
 ## Populando o catálogo
